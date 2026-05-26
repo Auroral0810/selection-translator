@@ -5,7 +5,7 @@ import type {TranslationPromptUseCase} from "../translation/prompts";
 import {collectRenderedTranslationBlocks} from "./block-collector";
 import {applyImmersiveStyle} from "./styles";
 import {RenderedTranslationTarget, TranslationBlock} from "./types";
-import {getFileByPath} from "../vault/files";
+import {getTFileByPath} from "../vault/files";
 
 export class ImmersiveTranslationManager {
 	private static readonly MAX_CONSECUTIVE_FAILURES = 3;
@@ -289,7 +289,7 @@ export class ImmersiveTranslationManager {
 		if (!filePath) {
 			return "";
 		}
-		const file = getFileByPath(this.plugin.app.vault, filePath);
+		const file = getTFileByPath(this.plugin.app.vault, filePath);
 		return file?.basename ?? filePath.split("/").pop()?.replace(/\.md$/i, "") ?? "";
 	}
 

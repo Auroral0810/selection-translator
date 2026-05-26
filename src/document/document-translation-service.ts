@@ -1,6 +1,6 @@
 import {MarkdownView, TFile, WorkspaceLeaf} from "obsidian";
 import type TranslationPlugin from "../main";
-import {getFileByPath} from "../vault/files";
+import {getTFileByPath} from "../vault/files";
 import {TranslatedFileSyncService} from "./translated-file-sync";
 import {TranslatedFileSyncStore} from "./translated-file-sync-store";
 
@@ -76,7 +76,7 @@ export class DefaultDocumentTranslationService implements DocumentTranslationSer
 
 	getSourceFileForPath(path: string): TFile | null {
 		const link = this.syncStore.findLinkByTranslatedPath(path);
-		return link ? getFileByPath(this.plugin.app.vault, link.sourcePath) : null;
+		return link ? getTFileByPath(this.plugin.app.vault, link.sourcePath) : null;
 	}
 
 	stop(sourcePath: string): void {

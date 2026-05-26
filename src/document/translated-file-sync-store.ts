@@ -2,7 +2,7 @@ import {TFile} from "obsidian";
 import type TranslationPlugin from "../main";
 import type {DocumentTranslationLinkSettingEntry} from "../settings/types";
 import {sha256Hex} from "../translation/hash";
-import {getFileByPath} from "../vault/files";
+import {getTFileByPath} from "../vault/files";
 
 export interface ParsedTranslatedFile {
 	legacyMetadata: DocumentTranslationLinkSettingEntry | null;
@@ -104,7 +104,7 @@ export class TranslatedFileSyncStore {
 			return null;
 		}
 
-		const file = getFileByPath(this.plugin.app.vault, link.translatedPath);
+		const file = getTFileByPath(this.plugin.app.vault, link.translatedPath);
 		if (file) {
 			return file;
 		}

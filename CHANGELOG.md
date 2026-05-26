@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Renamed the vault file lookup helper to avoid Obsidian API compatibility false positives in community review.
+- Rebuilt release artifacts with GitHub artifact attestations.
+
 ## 1.0.0
 
 Initial release.

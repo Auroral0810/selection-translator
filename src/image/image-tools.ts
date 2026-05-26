@@ -1,7 +1,7 @@
 import {Editor, MarkdownFileInfo, MarkdownView, TFile} from "obsidian";
 import TranslationPlugin from "../main";
 import {isHTMLElement, isHTMLImageElement} from "../ui/dom";
-import {getFileByPath} from "../vault/files";
+import {getTFileByPath} from "../vault/files";
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp"]);
 
@@ -49,7 +49,7 @@ export function resolveImageContextFromReadingDom(plugin: TranslationPlugin, eve
 		image.getAttribute("src") ?? "",
 		image.currentSrc,
 	];
-	const sourceFile = getFileByPath(plugin.app.vault, sourcePath);
+	const sourceFile = getTFileByPath(plugin.app.vault, sourcePath);
 
 	for (const candidate of candidates) {
 		const file = resolveVaultImage(plugin, candidate, sourcePath);
@@ -77,7 +77,7 @@ export async function createAvailableSiblingFile(plugin: TranslationPlugin, sour
 	let path = `${basePath}${suffix}.${normalizedExtension}`;
 	let counter = 2;
 
-	while (getFileByPath(plugin.app.vault, path)) {
+	while (getTFileByPath(plugin.app.vault, path)) {
 		path = `${basePath}${suffix}.${counter}.${normalizedExtension}`;
 		counter++;
 	}

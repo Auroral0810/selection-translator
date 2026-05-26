@@ -9,7 +9,7 @@ import {
 	restoreProtectedTokens,
 } from "../markdown/markdown-ast";
 import {TranslatedFileSyncStore} from "./translated-file-sync-store";
-import {getFileByPath} from "../vault/files";
+import {getTFileByPath} from "../vault/files";
 
 interface TranslatedFileSession {
 	sourcePath: string;
@@ -208,7 +208,7 @@ export class TranslatedFileSyncService {
 		this.clearSessionTimer(session);
 		session.pendingTimer = window.setTimeout(() => {
 			session.pendingTimer = null;
-			const sourceFile = getFileByPath(this.plugin.app.vault, sourcePath);
+			const sourceFile = getTFileByPath(this.plugin.app.vault, sourcePath);
 			if (sourceFile) {
 				void this.refresh(sourceFile);
 			} else {
@@ -241,7 +241,7 @@ export class TranslatedFileSyncService {
 		}
 
 		const currentSession = this.sessions.get(sourceFile.path);
-		const existingSessionFile = currentSession ? getFileByPath(this.plugin.app.vault, currentSession.translatedPath) : null;
+		const existingSessionFile = currentSession ? getTFileByPath(this.plugin.app.vault, currentSession.translatedPath) : null;
 		if (existingSessionFile) {
 			return existingSessionFile;
 		}
@@ -252,7 +252,7 @@ export class TranslatedFileSyncService {
 		}
 
 		const defaultPath = this.getDefaultTranslatedPath(sourceFile);
-		const defaultFile = getFileByPath(this.plugin.app.vault, defaultPath);
+		const defaultFile = getTFileByPath(this.plugin.app.vault, defaultPath);
 		if (defaultFile) {
 			return defaultFile;
 		}
@@ -272,7 +272,7 @@ export class TranslatedFileSyncService {
 		let path = this.getDefaultTranslatedPath(sourceFile);
 		let counter = 2;
 
-		while (getFileByPath(this.plugin.app.vault, path)) {
+		while (getTFileByPath(this.plugin.app.vault, path)) {
 			path = `${basePath}${suffix}.${counter}.md`;
 			counter++;
 		}
@@ -285,7 +285,7 @@ export class TranslatedFileSyncService {
 		sourceMarkdown: string,
 		translatedBody: string,
 	): Promise<boolean> {
-		const translatedFile = getFileByPath(this.plugin.app.vault, session.translatedPath);
+		const translatedFile = getTFileByPath(this.plugin.app.vault, session.translatedPath);
 		if (!translatedFile) {
 			this.stop(session.sourcePath);
 			throw new Error("Translated file no longer exists.");
@@ -309,7 +309,7 @@ export class TranslatedFileSyncService {
 	}
 
 	private getSourceFileTitle(sourcePath: string): string {
-		const file = getFileByPath(this.plugin.app.vault, sourcePath);
+		const file = getTFileByPath(this.plugin.app.vault, sourcePath);
 		return file?.basename ?? sourcePath.split("/").pop()?.replace(/\.md$/i, "") ?? "";
 	}
 
