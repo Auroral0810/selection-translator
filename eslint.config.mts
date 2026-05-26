@@ -8,6 +8,10 @@ export default tseslint.config(
 		languageOptions: {
 			globals: {
 				...globals.browser,
+				activeDocument: "readonly",
+				createDiv: "readonly",
+				createEl: "readonly",
+				createFragment: "readonly",
 			},
 			parserOptions: {
 				projectService: {
@@ -22,9 +26,17 @@ export default tseslint.config(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		rules: {
+			"obsidianmd/ui/sentence-case": "off",
+		},
+	},
 	globalIgnores([
 		"node_modules",
 		"dist",
+		"ext-saladict",
+		"read-frog",
+		".VSCodeCounter",
 		"esbuild.config.mjs",
 		"eslint.config.js",
 		"version-bump.mjs",

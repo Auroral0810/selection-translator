@@ -20,3 +20,8 @@ data.json
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
+
+# Local reference projects and generated reports
+.VSCodeCounter/
+ext-saladict/
+read-frog/

@@ -1,90 +1,59 @@
-# Obsidian Sample Plugin
+# Selection Translator
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Selection Translator is an Obsidian plugin for translating selected text, paragraphs, Markdown notes, embedded images, and speech output from inside your vault.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+- Translate selected text or the current paragraph from the command palette, editor menu, or ribbon menu.
+- Open a quick translation panel for ad hoc text translation.
+- Translate a Markdown file into a linked side-by-side note.
+- Show immersive bilingual translations in reading mode.
+- Translate embedded images through the configured image translation provider.
+- Play translated text with Web Speech, OpenAI-compatible TTS, or Azure Speech.
+- Configure AI, machine translation, prompt presets, cache, queue, display, and privacy settings.
 
-## First time developing plugins?
+## Privacy and external services
 
-Quick starting guide for new plugin devs:
+The plugin does not collect analytics and does not upload vault content in the background.
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+Text, images, or speech requests are sent only when you actively use translation, TTS, model listing, connection testing, or image translation with a configured provider. API keys are stored in Obsidian plugin data; hidden inputs prevent casual viewing but do not encrypt the stored values. Translation cache entries are stored locally in plugin settings and can be cleared or disabled from the plugin settings.
 
-## Releasing new releases
+Supported external services depend on your configuration and may include OpenAI-compatible APIs, DeepSeek, OpenRouter, Gemini, Claude, Ollama, Google Cloud Translation, Azure Translator, AWS Translate, DeepL/DeepLX, Baidu, Youdao, OpenAI Images, OpenAI TTS, and Azure Speech.
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+## Development
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+Install dependencies:
 
-## Adding your plugin to the community plugin list
-
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+```bash
+npm install
 ```
 
-If you have multiple URLs, you can also do:
+Run the development build watcher:
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+```bash
+npm run dev
 ```
 
-## API Documentation
+Create a production build:
 
-See https://docs.obsidian.md
+```bash
+npm run build
+```
+
+Run lint checks:
+
+```bash
+npm run lint
+```
+
+## Release
+
+Release tags must exactly match `manifest.json` version, without a leading `v`.
+
+The release workflow builds `main.js`, verifies `manifest.json` and `versions.json`, generates GitHub artifact attestations, and uploads `manifest.json`, `main.js`, and `styles.css` to the GitHub release.
+
+For manual local testing, copy `main.js`, `manifest.json`, and `styles.css` into:
+
+```text
+<Vault>/.obsidian/plugins/selection-translator/
+```

@@ -1,80 +1,101 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import {Plugin} from "obsidian";
+import {DEFAULT_SETTINGS, TranslationPluginSettings, TranslationSettingTab} from "./settings";
+import {registerTranslationCommands} from "./triggers/commands";
+import {registerEditorMenu} from "./triggers/editor-menu";
+import {registerImageContextMenus} from "./triggers/image-context-menu";
+import {registerTranslationRibbon} from "./triggers/ribbon";
+import {DefaultDocumentTranslationService, DocumentTranslationService} from "./document/document-translation-service";
+import {ImmersiveTranslationManager} from "./immersive/manager";
+import {SideBySideSyncManager} from "./side-by-side/scroll-sync";
+import {closeQuickTranslationPanel} from "./ui/quick-translation-panel";
+import {TaskLogManager} from "./ui/task-log-panel";
+import {closeTranslationPanel, rememberTranslationPointerPosition} from "./ui/translation-panel";
+import {TranslationCache} from "./translation/cache";
+import {DefaultPromptService, PromptService} from "./translation/prompt-service";
+import {DefaultRequestQueueService, RequestQueueService} from "./translation/request-queue-service";
+import {DefaultTranslateService, TranslateService} from "./translation/translate-service";
+import {getDefaultProviderConfig, PROVIDER_LABELS} from "./translation/provider-config";
+import {TranslationMetricsService} from "./translation/metrics";
+import type {TranslationProviderId} from "./translation/types";
+import {DefaultTtsService, TtsService, getDefaultTtsConfig} from "./tts/tts-service";
 
-// Remember to rename these classes and interfaces!
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class TranslationPlugin extends Plugin {
+	settings: TranslationPluginSettings;
+	translationCache!: TranslationCache;
+	translationMetrics!: TranslationMetricsService;
+	requestQueueService!: RequestQueueService;
+	promptService!: PromptService;
+	translateService!: TranslateService;
+	ttsService!: TtsService;
+	documentTranslationService!: DocumentTranslationService;
+	immersiveManager!: ImmersiveTranslationManager;
+	sideBySideSyncManager!: SideBySideSyncManager;
+	taskLogManager!: TaskLogManager;
 
 	async onload() {
 		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+		this.translationCache = new TranslationCache(this);
+		this.translationMetrics = new TranslationMetricsService();
+		this.requestQueueService = new DefaultRequestQueueService({
+			rate: this.settings.immersiveQueueRate,
+			capacity: this.settings.immersiveQueueCapacity,
+			timeoutMs: this.settings.requestTimeout,
+			maxRetries: this.settings.maxRetries,
+			baseRetryDelayMs: 1000,
 		});
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-				return false;
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-
+		this.promptService = new DefaultPromptService(this);
+		this.translateService = new DefaultTranslateService(this, this.promptService);
+		this.ttsService = new DefaultTtsService(this);
+		this.documentTranslationService = new DefaultDocumentTranslationService(this);
+		this.translationCache.cleanExpired();
+		this.immersiveManager = new ImmersiveTranslationManager(this);
+		this.sideBySideSyncManager = new SideBySideSyncManager(this);
+		this.taskLogManager = new TaskLogManager(this);
+		this.immersiveManager.register();
+		this.sideBySideSyncManager.register();
+		this.documentTranslationService.register();
+		registerTranslationCommands(this);
+		registerEditorMenu(this);
+		registerImageContextMenus(this);
+		registerTranslationRibbon(this);
+		this.registerDomEvent(activeDocument, "pointerdown", rememberTranslationPointerPosition);
+		this.addSettingTab(new TranslationSettingTab(this.app, this));
 	}
 
 	onunload() {
+		this.requestQueueService?.clear();
+		this.immersiveManager?.stopAll();
+		this.sideBySideSyncManager?.closeAll();
+		this.documentTranslationService?.stopAll();
+		this.ttsService?.stop();
+		this.translationCache?.close();
+		this.taskLogManager?.close();
+		closeTranslationPanel();
+		closeQuickTranslationPanel();
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<TranslationPluginSettings>);
+		const legacySettings = this.settings as Partial<TranslationPluginSettings> & Record<string, unknown>;
+		const provider = (legacySettings as Record<string, unknown>).currentProvider;
+		if (!isTranslationProviderId(provider)) {
+			this.settings.currentProvider = DEFAULT_SETTINGS.currentProvider;
+			this.settings.currentProviderConfig = getDefaultProviderConfig(DEFAULT_SETTINGS.currentProvider);
+		}
+		this.settings.currentProviderConfig = {
+			...getDefaultProviderConfig(this.settings.currentProvider),
+			...this.settings.currentProviderConfig,
+		};
+		this.settings.ttsConfig = {
+			...getDefaultTtsConfig(this.settings.ttsProvider),
+			...this.settings.ttsConfig,
+		};
+		this.settings.imageBaseUrl = this.settings.imageBaseUrl || DEFAULT_SETTINGS.imageBaseUrl;
+		if (this.settings.imageModel !== "gpt-image-2" && this.settings.imageModel !== "gpt-image-1.5") {
+			delete legacySettings.imageModel;
+			this.settings.imageModel = DEFAULT_SETTINGS.imageModel;
+		}
+		this.settings.imageOutputFormat = normalizeImageOutputFormat(this.settings.imageOutputFormat);
 	}
 
 	async saveSettings() {
@@ -82,18 +103,11 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+function normalizeImageOutputFormat(value: string): string {
+	const normalized = value.trim().toLowerCase();
+	return normalized === "jpeg" || normalized === "webp" ? normalized : "png";
+}
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
+function isTranslationProviderId(value: unknown): value is TranslationProviderId {
+	return typeof value === "string" && value in PROVIDER_LABELS;
 }

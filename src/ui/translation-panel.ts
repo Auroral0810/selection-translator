@@ -1,0 +1,384 @@
+import {Notice, setIcon} from "obsidian";
+import {t} from "../i18n";
+import type TranslationPlugin from "../main";
+import {formatTranslationError} from "../translation/errors";
+import {isHTMLElement} from "./dom";
+
+export interface PanelAnchorPoint {
+	x: number;
+	y: number;
+}
+
+export interface TranslationPanelOptions {
+	sourceText: string;
+	translatedText: string;
+	showSourceText: boolean;
+	anchorPoint?: PanelAnchorPoint | null;
+}
+
+let currentPanel: TranslationPanel | null = null;
+let lastPointerPosition: {x: number; y: number} | null = null;
+
+const PANEL_MARGIN = 8;
+const PANEL_POINTER_OFFSET = 16;
+
+export function rememberTranslationPointerPosition(event: PointerEvent): void {
+	lastPointerPosition = {
+		x: event.clientX,
+		y: event.clientY,
+	};
+}
+
+export function showTranslationPanel(plugin: TranslationPlugin, options: TranslationPanelOptions): void {
+	if (!currentPanel) {
+		currentPanel = new TranslationPanel(plugin, () => {
+			currentPanel = null;
+		});
+	}
+
+	currentPanel.update(options);
+}
+
+export function closeTranslationPanel(): void {
+	currentPanel?.close();
+}
+
+class TranslationPanel {
+	private readonly rootEl: HTMLElement;
+	private readonly bodyEl: HTMLElement;
+	private readonly pinButtonEl: HTMLButtonElement;
+	private readonly onClose: () => void;
+	private isPinned = false;
+	private hasRendered = false;
+	private dragStartX = 0;
+	private dragStartY = 0;
+	private dragStartLeft = 0;
+	private dragStartTop = 0;
+	private hasCustomPosition = false;
+	private isSpeaking = false;
+	private speechToken = 0;
+
+	constructor(private readonly plugin: TranslationPlugin, onClose: () => void) {
+		this.onClose = onClose;
+		this.rootEl = plugin.app.workspace.containerEl.createDiv({
+			cls: "selection-translator-panel",
+		});
+
+		const headerEl = this.rootEl.createDiv({
+			cls: "selection-translator-panel-header",
+		});
+		headerEl.addEventListener("pointerdown", this.handlePointerDown);
+
+		headerEl.createDiv({
+			cls: "selection-translator-panel-title",
+			text: t(this.plugin, "panel.translation"),
+		});
+
+		const controlsEl = headerEl.createDiv({
+			cls: "selection-translator-panel-controls",
+		});
+
+		this.pinButtonEl = controlsEl.createEl("button", {
+			cls: "selection-translator-panel-button",
+			attr: {
+				"aria-label": t(this.plugin, "panel.pin"),
+				"aria-pressed": "false",
+				type: "button",
+			},
+		});
+		setIcon(this.pinButtonEl, "pin");
+		this.pinButtonEl.addEventListener("click", () => this.togglePinned());
+
+		const closeButtonEl = controlsEl.createEl("button", {
+			cls: "selection-translator-panel-button",
+			attr: {
+				"aria-label": t(this.plugin, "panel.close"),
+				type: "button",
+			},
+		});
+		setIcon(closeButtonEl, "x");
+		closeButtonEl.addEventListener("click", () => this.close());
+
+		this.bodyEl = this.rootEl.createDiv({
+			cls: "selection-translator-panel-body",
+		});
+		this.registerExternalClick();
+	}
+
+	update(options: TranslationPanelOptions): void {
+		this.stopSpeech();
+		this.bodyEl.empty();
+
+		if (options.showSourceText) {
+			this.createSection(t(this.plugin, "panel.original"), options.sourceText);
+		}
+
+		this.createTranslationSection(options.translatedText);
+
+		if (!this.isPinned || !this.hasRendered) {
+			this.positionNearAnchor(options.anchorPoint ?? lastPointerPosition);
+		}
+
+		this.hasRendered = true;
+		this.clampToViewport();
+	}
+
+	private createSection(label: string, text: string): void {
+		const sectionEl = this.bodyEl.createDiv({
+			cls: "selection-translator-panel-section",
+		});
+		const headerEl = sectionEl.createDiv({
+			cls: "selection-translator-panel-section-header",
+		});
+		headerEl.createDiv({
+			cls: "selection-translator-panel-label",
+			text: label,
+		});
+
+		sectionEl.createDiv({
+			cls: "selection-translator-panel-text",
+			text,
+		});
+	}
+
+	private createTranslationSection(translatedText: string): void {
+		const sectionEl = this.bodyEl.createDiv({
+			cls: "selection-translator-panel-section",
+		});
+		const headerEl = sectionEl.createDiv({
+			cls: "selection-translator-panel-section-header",
+		});
+		headerEl.createDiv({
+			cls: "selection-translator-panel-label",
+			text: t(this.plugin, "panel.translation"),
+		});
+
+		const actionsEl = headerEl.createDiv({
+			cls: "selection-translator-panel-section-actions",
+		});
+
+		const ttsButtonEl = actionsEl.createEl("button", {
+			cls: "selection-translator-panel-button selection-translator-panel-tts-button",
+			attr: {
+				"aria-label": t(this.plugin, "panel.readTranslation"),
+				type: "button",
+			},
+		});
+		setIcon(ttsButtonEl, "volume-2");
+		ttsButtonEl.addEventListener("click", () => {
+			void this.toggleSpeech(translatedText, ttsButtonEl);
+		});
+
+		const copyButtonEl = actionsEl.createEl("button", {
+			cls: "selection-translator-panel-button selection-translator-panel-copy-button",
+			attr: {
+				"aria-label": t(this.plugin, "panel.copyTranslation"),
+				type: "button",
+			},
+		});
+		setIcon(copyButtonEl, "copy");
+		copyButtonEl.addEventListener("click", () => {
+			void this.copyTranslation(translatedText);
+		});
+
+		sectionEl.createDiv({
+			cls: "selection-translator-panel-text",
+			text: translatedText,
+		});
+	}
+
+	private async toggleSpeech(translatedText: string, buttonEl: HTMLButtonElement): Promise<void> {
+		if (this.isSpeaking) {
+			this.stopSpeech();
+			this.setSpeechButtonState(buttonEl, false);
+			return;
+		}
+
+		if (!translatedText.trim()) {
+			new Notice(t(this.plugin, "panel.noTranslationToRead"));
+			return;
+		}
+		if (!this.plugin.settings.ttsEnabled) {
+			new Notice(t(this.plugin, "panel.enableTts"));
+			return;
+		}
+
+		const token = ++this.speechToken;
+		this.isSpeaking = true;
+		this.setSpeechButtonState(buttonEl, true);
+
+		try {
+			await this.plugin.ttsService.speak({
+				text: translatedText,
+				language: this.plugin.settings.targetLanguage,
+				voice: this.plugin.settings.ttsVoice,
+				rate: this.plugin.settings.ttsRate,
+				pitch: this.plugin.settings.ttsPitch,
+				volume: this.plugin.settings.ttsVolume,
+			});
+		} catch (error) {
+			if (token === this.speechToken) {
+				console.error("Failed to read translation", error);
+				new Notice(formatTranslationError(error));
+			}
+		} finally {
+			if (token === this.speechToken) {
+				this.isSpeaking = false;
+				this.setSpeechButtonState(buttonEl, false);
+			}
+		}
+	}
+
+	private stopSpeech(): void {
+		if (!this.isSpeaking) {
+			return;
+		}
+		this.speechToken++;
+		this.isSpeaking = false;
+		this.plugin.ttsService.stop();
+	}
+
+	private setSpeechButtonState(buttonEl: HTMLButtonElement, isSpeaking: boolean): void {
+		buttonEl.toggleClass("is-active", isSpeaking);
+		buttonEl.setAttr("aria-label", isSpeaking ? t(this.plugin, "panel.stopReading") : t(this.plugin, "panel.readTranslation"));
+		setIcon(buttonEl, isSpeaking ? "circle-stop" : "volume-2");
+	}
+
+	private async copyTranslation(translatedText: string): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(translatedText);
+			new Notice(t(this.plugin, "notice.copiedTranslation"));
+		} catch (error) {
+			console.error("Failed to copy translation", error);
+			new Notice(t(this.plugin, "notice.copyTranslationFailed"));
+		}
+	}
+
+	private togglePinned(): void {
+		this.isPinned = !this.isPinned;
+		this.rootEl.toggleClass("is-pinned", this.isPinned);
+		this.pinButtonEl.toggleClass("is-active", this.isPinned);
+		this.pinButtonEl.setAttr("aria-pressed", String(this.isPinned));
+		this.pinButtonEl.setAttr("aria-label", this.isPinned ? t(this.plugin, "panel.unpin") : t(this.plugin, "panel.pin"));
+
+		if (this.isPinned) {
+			this.unregisterExternalClick();
+		} else {
+			this.registerExternalClick();
+		}
+	}
+
+	private handlePointerDown = (event: PointerEvent): void => {
+		if (event.button !== 0 || this.isControlTarget(event.target)) {
+			return;
+		}
+
+		const rect = this.rootEl.getBoundingClientRect();
+		this.dragStartX = event.clientX;
+		this.dragStartY = event.clientY;
+		this.dragStartLeft = rect.left;
+		this.dragStartTop = rect.top;
+
+		this.hasCustomPosition = true;
+		this.rootEl.addClass("is-dragging");
+		this.rootEl.addClass("has-custom-position");
+		this.rootEl.setCssProps({
+			"--selection-translator-panel-left": `${rect.left}px`,
+			"--selection-translator-panel-top": `${rect.top}px`,
+		});
+
+		window.addEventListener("pointermove", this.handlePointerMove);
+		window.addEventListener("pointerup", this.handlePointerUp, {once: true});
+		event.preventDefault();
+	};
+
+	private handlePointerMove = (event: PointerEvent): void => {
+		const rect = this.rootEl.getBoundingClientRect();
+		const nextLeft = this.dragStartLeft + event.clientX - this.dragStartX;
+		const nextTop = this.dragStartTop + event.clientY - this.dragStartY;
+		const left = this.clamp(nextLeft, PANEL_MARGIN, window.innerWidth - rect.width - PANEL_MARGIN);
+		const top = this.clamp(nextTop, PANEL_MARGIN, window.innerHeight - rect.height - PANEL_MARGIN);
+
+		this.rootEl.setCssProps({
+			"--selection-translator-panel-left": `${left}px`,
+			"--selection-translator-panel-top": `${top}px`,
+		});
+	};
+
+	private handlePointerUp = (): void => {
+		this.rootEl.removeClass("is-dragging");
+		window.removeEventListener("pointermove", this.handlePointerMove);
+	};
+
+	private handleExternalPointerDown = (event: PointerEvent): void => {
+		if (this.isPinned || this.rootEl.contains(event.target as Node | null)) {
+			return;
+		}
+
+		this.close();
+	};
+
+	private isControlTarget(target: EventTarget | null): boolean {
+		return isHTMLElement(target) && Boolean(target.closest(".selection-translator-panel-controls"));
+	}
+
+	private registerExternalClick(): void {
+		window.addEventListener("pointerdown", this.handleExternalPointerDown, true);
+	}
+
+	private unregisterExternalClick(): void {
+		window.removeEventListener("pointerdown", this.handleExternalPointerDown, true);
+	}
+
+	private clampToViewport(): void {
+		const rect = this.rootEl.getBoundingClientRect();
+
+		if (!this.hasCustomPosition) {
+			return;
+		}
+
+		const left = this.clamp(rect.left, PANEL_MARGIN, window.innerWidth - rect.width - PANEL_MARGIN);
+		const top = this.clamp(rect.top, PANEL_MARGIN, window.innerHeight - rect.height - PANEL_MARGIN);
+		this.rootEl.setCssProps({
+			"--selection-translator-panel-left": `${left}px`,
+			"--selection-translator-panel-top": `${top}px`,
+		});
+	}
+
+	private positionNearAnchor(anchorPoint: PanelAnchorPoint | null): void {
+		if (!anchorPoint) {
+			return;
+		}
+
+		const rect = this.rootEl.getBoundingClientRect();
+		const left = this.clamp(
+			anchorPoint.x + PANEL_POINTER_OFFSET,
+			PANEL_MARGIN,
+			window.innerWidth - rect.width - PANEL_MARGIN,
+		);
+		const top = this.clamp(
+			anchorPoint.y + PANEL_POINTER_OFFSET,
+			PANEL_MARGIN,
+			window.innerHeight - rect.height - PANEL_MARGIN,
+		);
+
+		this.hasCustomPosition = true;
+		this.rootEl.addClass("has-custom-position");
+		this.rootEl.setCssProps({
+			"--selection-translator-panel-left": `${left}px`,
+			"--selection-translator-panel-top": `${top}px`,
+		});
+	}
+
+	private clamp(value: number, min: number, max: number): number {
+		return Math.min(Math.max(value, min), Math.max(min, max));
+	}
+
+	close(): void {
+		this.stopSpeech();
+		this.handlePointerUp();
+		this.unregisterExternalClick();
+		this.rootEl.remove();
+		this.onClose();
+	}
+}
