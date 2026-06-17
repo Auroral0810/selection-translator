@@ -697,3 +697,139 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+/* ========================================
+   LOADING ANIMATIONS & MICRO-INTERACTIONS
+   ======================================== */
+
+/* Loading spinner animation */
+@keyframes selection-translator-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Loading state indicator */
+.selection-translator-loading {
+	position: relative;
+	opacity: 0.6;
+}
+
+.selection-translator-loading::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 16px;
+	height: 16px;
+	margin-top: -8px;
+	margin-left: -8px;
+	border: 2px solid var(--interactive-accent);
+	border-radius: 50%;
+	border-top-color: transparent;
+	animation: selection-translator-spin 0.6s linear infinite;
+}
+
+/* Button hover & active states with smooth transitions */
+.selection-translator-panel-button,
+.selection-translator-quick-panel-button,
+.selection-translator-settings-tab {
+	transition: all 0.2s ease;
+}
+
+.selection-translator-panel-button:hover,
+.selection-translator-quick-panel-button:hover {
+	transform: scale(1.05);
+}
+
+.selection-translator-panel-button:active,
+.selection-translator-quick-panel-button:active {
+	transform: scale(0.95);
+}
+
+/* Panel fade-in animation */
+@keyframes selection-translator-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.selection-translator-panel,
+.selection-translator-quick-panel {
+	animation: selection-translator-fade-in 0.2s ease;
+}
+
+/* Focus visible states for keyboard navigation */
+.selection-translator-panel-button:focus-visible,
+.selection-translator-quick-panel-button:focus-visible,
+.selection-translator-settings-tab:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+/* ========================================
+   MOBILE OPTIMIZATION
+   ======================================== */
+
+/* Larger touch targets for mobile devices */
+@media (pointer: coarse) {
+	.selection-translator-panel-button,
+	.selection-translator-panel-copy-button,
+	.selection-translator-panel-tts-button {
+		min-width: 44px;
+		min-height: 44px;
+		width: 44px;
+		height: 44px;
+	}
+
+	.selection-translator-quick-panel-button {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.selection-translator-panel-header {
+		min-height: 48px;
+	}
+}
+
+/* ========================================
+   ACCESSIBILITY IMPROVEMENTS
+   ======================================== */
+
+/* Skip reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+	.selection-translator-panel-button,
+	.selection-translator-quick-panel-button,
+	.selection-translator-settings-tab {
+		transition: none;
+	}
+
+	.selection-translator-panel,
+	.selection-translator-quick-panel {
+		animation: none;
+	}
+
+	.selection-translator-loading::after {
+		animation: none;
+		border-color: var(--interactive-accent);
+	}
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+	.selection-translator-panel,
+	.selection-translator-quick-panel {
+		border-width: 2px;
+	}
+
+	.selection-translator-panel-button:focus-visible,
+	.selection-translator-quick-panel-button:focus-visible {
+		outline-width: 3px;
+	}
+}
+

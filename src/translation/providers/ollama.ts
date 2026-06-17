@@ -1,7 +1,7 @@
 import {TranslationError, requireSetting} from "../errors";
 import {requestJson} from "../http";
 import type {ProviderModelInfo, TranslationProviderAdapter} from "../types";
-import {ChatCompletionResponse, createUserPrompt, getProviderConfig, getSystemPrompt} from "./shared";
+import {ChatCompletionResponse, assertNotTruncated, createUserPrompt, getMaxOutputTokens, getProviderConfig, getSystemPrompt} from "./shared";
 
 interface OllamaTagsResponse {
 	models?: Array<{
@@ -23,21 +23,25 @@ export function createOllamaAdapter(): TranslationProviderAdapter {
 			const config = getProviderConfig(request);
 			const baseUrl = requireSetting(config.baseUrl, "Ollama base URL").replace(/\/+$/, "");
 			const model = requireSetting(config.model, "Ollama model");
+			const maxOutputTokens = getMaxOutputTokens(config);
+			const body = {
+				model,
+				temperature: config.temperature,
+				messages: [
+					{role: "system", content: getSystemPrompt(request)},
+					{role: "user", content: createUserPrompt(request)},
+				],
+				...(maxOutputTokens ? {max_tokens: maxOutputTokens} : {}),
+			};
 			const result = await requestJson<ChatCompletionResponse>({
 				url: `${baseUrl}/v1/chat/completions`,
 				method: "POST",
 				timeoutMs: request.settings.requestTimeout,
 				headers: {"Content-Type": "application/json"},
-				body: JSON.stringify({
-					model,
-					temperature: config.temperature,
-					messages: [
-						{role: "system", content: getSystemPrompt(request)},
-						{role: "user", content: createUserPrompt(request)},
-					],
-				}),
+				body: JSON.stringify(body),
 			});
 
+			assertNotTruncated("Ollama", result.choices?.[0]?.finish_reason);
 			const text = result.choices?.[0]?.message?.content?.trim() ?? "";
 			if (!text) {
 				throw new TranslationError("Ollama returned an empty translation.");

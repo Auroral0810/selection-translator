@@ -47,6 +47,7 @@ class TranslationPanel {
 	private readonly rootEl: HTMLElement;
 	private readonly bodyEl: HTMLElement;
 	private readonly pinButtonEl: HTMLButtonElement;
+	private readonly headerEl: HTMLElement;
 	private readonly onClose: () => void;
 	private isPinned = false;
 	private hasRendered = false;
@@ -64,17 +65,23 @@ class TranslationPanel {
 			cls: "selection-translator-panel",
 		});
 
-		const headerEl = this.rootEl.createDiv({
+		// Add ARIA attributes for accessibility
+		this.rootEl.setAttribute("role", "dialog");
+		this.rootEl.setAttribute("aria-modal", "true");
+		this.rootEl.setAttribute("aria-label", t(this.plugin, "panel.translation"));
+
+		this.headerEl = this.rootEl.createDiv({
 			cls: "selection-translator-panel-header",
 		});
-		headerEl.addEventListener("pointerdown", this.handlePointerDown);
 
-		headerEl.createDiv({
+		const titleEl = this.headerEl.createDiv({
 			cls: "selection-translator-panel-title",
 			text: t(this.plugin, "panel.translation"),
 		});
+		titleEl.id = "selection-translator-panel-title";
+		this.rootEl.setAttribute("aria-labelledby", "selection-translator-panel-title");
 
-		const controlsEl = headerEl.createDiv({
+		const controlsEl = this.headerEl.createDiv({
 			cls: "selection-translator-panel-controls",
 		});
 
@@ -103,6 +110,7 @@ class TranslationPanel {
 			cls: "selection-translator-panel-body",
 		});
 		this.registerExternalClick();
+		this.registerKeyboardNavigation();
 	}
 
 	update(options: TranslationPanelOptions): void {
@@ -330,6 +338,19 @@ class TranslationPanel {
 		window.removeEventListener("pointerdown", this.handleExternalPointerDown, true);
 	}
 
+	private registerKeyboardNavigation(): void {
+		this.rootEl.addEventListener("keydown", this.handleKeyDown);
+	}
+
+	private handleKeyDown = (event: KeyboardEvent): void => {
+		// ESC to close panel
+		if (event.key === "Escape") {
+			this.close();
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	};
+
 	private clampToViewport(): void {
 		const rect = this.rootEl.getBoundingClientRect();
 
@@ -378,6 +399,11 @@ class TranslationPanel {
 		this.stopSpeech();
 		this.handlePointerUp();
 		this.unregisterExternalClick();
+
+		// Remove all event listeners to prevent memory leaks
+		this.rootEl.removeEventListener("keydown", this.handleKeyDown);
+		this.headerEl.removeEventListener("pointerdown", this.handlePointerDown);
+
 		this.rootEl.remove();
 		this.onClose();
 	}

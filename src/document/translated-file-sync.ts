@@ -27,6 +27,7 @@ const REFRESH_DEBOUNCE_MS = 1500;
 export class TranslatedFileSyncService {
 	private readonly sessions = new Map<string, TranslatedFileSession>();
 	private readonly writingPaths = new Set<string>();
+	private readonly writingPromises = new Map<string, Promise<void>>();
 	private readonly compositionPendingPaths = new Set<string>();
 	private isComposing = false;
 
@@ -131,31 +132,80 @@ export class TranslatedFileSyncService {
 		session.queuedRefresh = false;
 		const generation = ++session.generation;
 
+		// Progress notice that will be updated
+		let progressNotice: Notice | null = null;
+
 		try {
 			const sourceMarkdown = await this.plugin.app.vault.read(sourceFile);
 			const blocks = parseMarkdownTranslationBlocks(sourceMarkdown);
 			if (blocks.length === 0) {
-				throw new Error("No translatable Markdown blocks found.");
+				// Don't throw error, just show friendly message
+				new Notice(t(this.plugin, "document.noTranslatableContent"), 5000);
+				return;
 			}
 
-			const replacements = await Promise.all(blocks.map(async block => ({
-				block,
-				translatedText: await this.translateBlock(block, session),
-			})));
+			// Create progress notice
+			progressNotice = new Notice(
+				t(this.plugin, "document.translatingProgress", {
+					current: "0",
+					total: String(blocks.length)
+				}),
+				0 // Don't auto-hide
+			);
+
+			// Translate blocks sequentially to show real-time progress
+			const results: Array<{text: string; ok: boolean}> = [];
+			let completedCount = 0;
+
+			for (const block of blocks) {
+				const result = await this.translateBlock(block, session);
+				results.push(result);
+				completedCount++;
+
+				// Update progress notice
+				if (progressNotice) {
+					progressNotice.setMessage(
+						t(this.plugin, "document.translatingProgress", {
+							current: String(completedCount),
+							total: String(blocks.length)
+						})
+					);
+				}
+			}
+
+			// Hide progress notice
+			if (progressNotice) {
+				progressNotice.hide();
+				progressNotice = null;
+			}
 
 			if (session.generation !== generation) {
 				return;
 			}
 
+			const replacements = blocks.map((block, index) => ({
+				block,
+				translatedText: results[index]?.text ?? "",
+			}));
+			const failedCount = results.filter(result => !result.ok).length;
+
 			const translatedBody = renderTranslatedMarkdown(sourceMarkdown, replacements);
 			const didWrite = await this.writeTranslatedFile(session, sourceMarkdown, translatedBody);
 			if (didWrite) {
-				new Notice(t(this.plugin, "document.updated"), 5000);
+				if (failedCount > 0) {
+					new Notice(`⚠️ ${t(this.plugin, "document.partialFailure", {count: String(failedCount)})}`, 10000);
+				} else {
+					new Notice(`✅ ${t(this.plugin, "document.updated")}`, 3000);
+				}
 			}
 		} catch (error) {
 			console.error("Failed to refresh translated file", error);
 			new Notice(t(this.plugin, "document.updateFailed", {error: formatTranslationError(error)}), 8000);
 		} finally {
+			// Ensure progress notice is hidden even on error
+			if (progressNotice) {
+				progressNotice.hide();
+			}
 			session.refreshing = false;
 			if (session.queuedRefresh) {
 				this.scheduleRefresh(session.sourcePath, 0);
@@ -163,11 +213,11 @@ export class TranslatedFileSyncService {
 		}
 	}
 
-	private async translateBlock(block: MarkdownTranslationBlock, session: TranslatedFileSession): Promise<string> {
+	private async translateBlock(block: MarkdownTranslationBlock, session: TranslatedFileSession): Promise<{text: string; ok: boolean}> {
 		const key = this.makeSessionTranslationKey(block);
 		const existing = session.translations.get(key);
 		if (existing !== undefined) {
-			return existing;
+			return {text: existing, ok: true};
 		}
 
 		try {
@@ -190,12 +240,13 @@ export class TranslatedFileSyncService {
 			});
 			const translatedText = restoreProtectedTokens(result.text, block.protectedTokens);
 			session.translations.set(key, translatedText);
-			return translatedText;
+			return {text: translatedText, ok: true};
 		} catch (error) {
+			// Do NOT cache the failure: leaving it out of session.translations means
+			// the next refresh retries this block instead of permanently keeping a placeholder.
 			console.error("Failed to translate Markdown block", error);
 			const fallback = `[Translation failed: ${formatTranslationError(error)}]`;
-			session.translations.set(key, fallback);
-			return fallback;
+			return {text: fallback, ok: false};
 		}
 	}
 
@@ -207,7 +258,12 @@ export class TranslatedFileSyncService {
 
 		this.clearSessionTimer(session);
 		session.pendingTimer = window.setTimeout(() => {
-			session.pendingTimer = null;
+			// Verify session still exists before executing callback
+			const currentSession = this.sessions.get(sourcePath);
+			if (!currentSession) {
+				return;
+			}
+			currentSession.pendingTimer = null;
 			const sourceFile = getTFileByPath(this.plugin.app.vault, sourcePath);
 			if (sourceFile) {
 				void this.refresh(sourceFile);
@@ -292,13 +348,18 @@ export class TranslatedFileSyncService {
 		}
 
 		this.writingPaths.add(translatedFile.path);
-		try {
-			await this.plugin.app.vault.modify(translatedFile, translatedBody);
-			await this.syncStore.recordGeneratedFile(sourceMarkdown, translatedBody, session.sourcePath, translatedFile.path);
-			return true;
-		} finally {
-			window.setTimeout(() => this.writingPaths.delete(translatedFile.path), 250);
-		}
+		const writePromise = (async () => {
+			try {
+				await this.plugin.app.vault.modify(translatedFile, translatedBody);
+				await this.syncStore.recordGeneratedFile(sourceMarkdown, translatedBody, session.sourcePath, translatedFile.path);
+			} finally {
+				this.writingPaths.delete(translatedFile.path);
+				this.writingPromises.delete(translatedFile.path);
+			}
+		})();
+		this.writingPromises.set(translatedFile.path, writePromise);
+		await writePromise;
+		return true;
 	}
 
 	private clearSessionTimer(session: TranslatedFileSession): void {
@@ -323,6 +384,7 @@ export class TranslatedFileSyncService {
 			config.model,
 			config.temperature,
 			block.id,
+			block.translationText, // Include actual text content to detect changes
 		].join("\u001f");
 	}
 }

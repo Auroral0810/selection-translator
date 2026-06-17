@@ -1,6 +1,6 @@
 {
 	"name": "selection-translator",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "An Obsidian plugin for selection, immersive, document, image, and speech translation.",
 	"main": "main.js",
 	"type": "module",

@@ -157,7 +157,8 @@ export class DefaultRequestQueueService implements RequestQueueService {
 
 	private async execute(task: QueueTask<unknown>): Promise<void> {
 		try {
-			const result = await this.withTimeout(task.run(), task.timeoutMs);
+			// Wrap task.run() in Promise.resolve to handle both sync throws and async rejections
+			const result = await this.withTimeout(Promise.resolve().then(() => task.run()), task.timeoutMs);
 			if (!task.drained) {
 				task.resolve(result);
 			}
@@ -235,8 +236,15 @@ export class DefaultRequestQueueService implements RequestQueueService {
 			return;
 		}
 
-		this.tokens = Math.min(this.options.capacity, this.tokens + (elapsedMs / 1000) * this.options.rate);
+		// Use integer milliseconds for token calculation to avoid floating-point accumulation
+		const tokensToAdd = (elapsedMs * this.options.rate) / 1000;
+		this.tokens = Math.min(this.options.capacity, this.tokens + tokensToAdd);
 		this.lastRefillAt = now;
+
+		// Periodically reset to capacity to correct any accumulated errors
+		if (this.tokens >= this.options.capacity * 0.99) {
+			this.tokens = this.options.capacity;
+		}
 	}
 
 	private sortPending(): void {
@@ -244,7 +252,9 @@ export class DefaultRequestQueueService implements RequestQueueService {
 	}
 
 	private getRetryDelayMs(retryCount: number): number {
-		const base = this.options.baseRetryDelayMs * (2 ** Math.max(0, retryCount - 1));
+		// Clamp retryCount to prevent overflow in exponential calculation
+		const clampedRetryCount = Math.min(retryCount, 20);
+		const base = this.options.baseRetryDelayMs * (2 ** Math.max(0, clampedRetryCount - 1));
 		const jitter = Math.random() * base * 0.1;
 		return Math.min(MAX_RETRY_DELAY_MS, base + jitter);
 	}
@@ -277,14 +287,16 @@ export class DefaultRequestQueueService implements RequestQueueService {
 	}
 }
 
-function isFatalQueueError(error: unknown): boolean {
+export function isFatalQueueError(error: unknown): boolean {
 	const message = error instanceof Error ? error.message : String(error);
 	const status = extractHttpStatus(message);
-	return status === 401 || status === 403 || status === 404 || status === 429;
+	// 429 (rate limit) is intentionally NOT fatal: it should retry with backoff
+	// instead of failing the whole backlog. Only auth/not-found are fatal.
+	return status === 401 || status === 403 || status === 404;
 }
 
 function extractHttpStatus(message: string): number | null {
-	const match = message.match(/\bHTTP\s+(\d{3})\b|\b(\d{3})\b/);
+	const match = message.match(/\bHTTP\s+(\d{3})\b|\bstatus(?:\s+code)?[\s:]+(\d{3})\b/i);
 	if (!match) {
 		return null;
 	}

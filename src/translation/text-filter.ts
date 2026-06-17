@@ -29,7 +29,12 @@ export function isTranslatableMarkdownText(text: string): boolean {
 		return false;
 	}
 
-	return letterCount / Math.max(1, compactLength) >= 0.45;
+	// Check letter density: at least 45% of non-whitespace characters should be letters
+	// Handle edge case: if compactLength is 0, letterCount must also be 0 (already returned false above)
+	if (compactLength === 0) {
+		return false;
+	}
+	return letterCount / compactLength >= 0.45;
 }
 
 export function normalizeMarkdownText(text: string): string {
@@ -48,11 +53,15 @@ export function normalizeMarkdownText(text: string): string {
 }
 
 function looksLikeCodeOrConfig(text: string): boolean {
+	// Keep strong programming signals, but relax punctuation/URL heuristics that
+	// commonly appear in normal prose (e.g. papers citing URLs, math like {x, y},
+	// or sentences containing "=" / ":"). Real code blocks are already excluded by
+	// the markdown AST (FencedCode/CodeBlock), so this filter is only a fallback.
+	const isSingleLine = !text.includes("\n");
 	return /\b(const|let|var|function|return|import|export|class|interface|type|new)\b/.test(text)
-		|| /=>|[{};]/.test(text)
+		|| /=>/.test(text)
 		|| /\b(dv|this|window|document|container|console)\./.test(text)
-		|| /^\s*[\w.-]+\s*[:=]\s*\S+/.test(text)
-		|| /https?:\/\/\S+/.test(text);
+		|| (isSingleLine && /^\s*[\w.-]+\s*[:=]\s*\S+$/.test(text));
 }
 
 function looksLikePronunciationOrNotation(text: string): boolean {
@@ -72,7 +81,12 @@ function looksLikePronunciationOrNotation(text: string): boolean {
 	const notationLength = Array.from(text.matchAll(/\/[^/\n]{1,80}\//g))
 		.reduce((length, match) => length + match[0].length, 0);
 	const compactLength = text.replace(/\s/g, "").length;
-	return notationLength > 0 && notationLength / Math.max(1, compactLength) >= 0.45;
+
+	// Handle edge case: empty or whitespace-only text
+	if (compactLength === 0) {
+		return false;
+	}
+	return notationLength > 0 && notationLength / compactLength >= 0.45;
 }
 
 function countMatches(text: string, pattern: RegExp): number {

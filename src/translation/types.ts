@@ -9,6 +9,8 @@ export interface TranslationProviderConfig {
 	baseUrl: string;
 	model: string;
 	temperature: number;
+	/** Max output tokens for LLM providers. 0 means "do not send" (use provider default). */
+	maxOutputTokens: number;
 	appId: string;
 	appSecret: string;
 	apiType: string;

@@ -1,6 +1,7 @@
 import {Modal, Notice, Setting, TFile} from "obsidian";
 import {t} from "../i18n";
 import TranslationPlugin from "../main";
+import {formatTranslationError} from "../translation/errors";
 import {
 	createAvailableSiblingFile,
 	ImageReferenceContext,
@@ -40,7 +41,7 @@ class TranslateImageModal extends Modal {
 				}));
 
 		new Setting(this.contentEl)
-			.setName("Prompt")
+			.setName(t(this.plugin, "image.modal.prompt"))
 			.setDesc(t(this.plugin, "image.modal.promptDesc"))
 			.addTextArea(text => text
 				.setValue(this.prompt)
@@ -73,6 +74,12 @@ class TranslateImageModal extends Modal {
 		button.disabled = true;
 		button.textContent = t(this.plugin, "quick.translating");
 
+		// Show persistent loading notice
+		const loadingNotice = new Notice(
+			t(this.plugin, "image.modal.translating"),
+			0 // Don't auto-hide
+		);
+
 		try {
 			const imageData = await this.plugin.app.vault.readBinary(this.file);
 			const translatedImage = await translateImageWithOpenAI(this.plugin, {
@@ -83,11 +90,17 @@ class TranslateImageModal extends Modal {
 				outputFormat: this.outputFormat,
 			});
 			const outputFile = await createAvailableSiblingFile(this.plugin, this.file, `.translated.${this.targetLanguage}`, this.outputFormat, translatedImage);
+
+			// Hide loading notice before showing success
+			loadingNotice.hide();
+
 			await this.applyAction(outputFile);
 			this.close();
 		} catch (error) {
+			// Hide loading notice on error
+			loadingNotice.hide();
 			console.error("Failed to translate image", error);
-			new Notice(error instanceof Error ? error.message : t(this.plugin, "image.modal.failed"));
+			new Notice(formatTranslationError(error), 8000);
 		} finally {
 			button.disabled = false;
 			button.textContent = getActionButtonText(this.plugin, this.action);

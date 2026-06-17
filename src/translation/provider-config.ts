@@ -37,25 +37,25 @@ export const PROVIDER_KINDS: Record<TranslationProviderId, TranslationProviderKi
 
 export function getDefaultProviderConfig(provider: TranslationProviderId): TranslationProviderConfig {
 	if (provider === "openai") {
-		return createConfig({baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", temperature: 0.2});
+		return createConfig({baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", temperature: 0.2, maxOutputTokens: 0});
 	}
 	if (provider === "deepseek") {
-		return createConfig({baseUrl: "https://api.deepseek.com", model: "deepseek-chat", temperature: 0.2});
+		return createConfig({baseUrl: "https://api.deepseek.com", model: "deepseek-chat", temperature: 0.2, maxOutputTokens: 0});
 	}
 	if (provider === "openrouter") {
-		return createConfig({baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4.1-mini", temperature: 0.2});
+		return createConfig({baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4.1-mini", temperature: 0.2, maxOutputTokens: 0});
 	}
 	if (provider === "openai-compatible") {
-		return createConfig({temperature: 0.2});
+		return createConfig({temperature: 0.2, maxOutputTokens: 0});
 	}
 	if (provider === "gemini") {
-		return createConfig({baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-1.5-flash", temperature: 0.2});
+		return createConfig({baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-1.5-flash", temperature: 0.2, maxOutputTokens: 0});
 	}
 	if (provider === "anthropic") {
-		return createConfig({baseUrl: "https://api.anthropic.com/v1", model: "claude-3-5-haiku-latest", temperature: 0.2});
+		return createConfig({baseUrl: "https://api.anthropic.com/v1", model: "claude-3-5-haiku-latest", temperature: 0.2, maxOutputTokens: 8192});
 	}
 	if (provider === "ollama") {
-		return createConfig({baseUrl: "http://localhost:11434", model: "qwen2.5:7b", temperature: 0.2});
+		return createConfig({baseUrl: "http://localhost:11434", model: "qwen2.5:7b", temperature: 0.2, maxOutputTokens: 0});
 	}
 	if (provider === "google-cloud-translate") {
 		return createConfig({baseUrl: "https://translation.googleapis.com/language/translate/v2"});
@@ -96,6 +96,7 @@ function createConfig(patch: Partial<TranslationProviderConfig> = {}): Translati
 		apiType: "",
 		region: "",
 		accessKeyId: "",
+		maxOutputTokens: 0,
 		...patch,
 	};
 }

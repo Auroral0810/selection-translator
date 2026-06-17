@@ -196,7 +196,9 @@ const ZH_CN: Record<string, string> = {
 
 	"settings.image.enable.name": "启用图片翻译",
 	"settings.image.enable.desc": "在图片右键菜单中显示图片翻译操作。",
+	"settings.image.apiKey.name": "API key",
 	"settings.image.apiKey.desc": "OpenAI Images API key。图片翻译使用独立配置，不复用翻译 API。",
+	"settings.image.baseUrl.name": "Base URL",
 	"settings.image.baseUrl.desc": "OpenAI Images API 根地址，也可以填写兼容代理地址。",
 	"settings.image.model.name": "图片模型",
 	"settings.image.model.desc": "用于 /images/edits 的 OpenAI 图片编辑模型。",
@@ -271,7 +273,12 @@ const ZH_CN: Record<string, string> = {
 	"scroll.noScrollable": "没有找到可滚动的 Markdown 窗口。请切换到阅读模式或打开更长的笔记。",
 	"scroll.enabled": "两个 Markdown 窗口已同步滚动。",
 	"document.updated": "译文文件已更新。",
+	"document.partialFailure": "译文文件已更新，但有 {count} 个段落翻译失败，将在下次刷新时重试。",
 	"document.updateFailed": "更新译文文件失败：{error}",
+	"document.translatingProgress": "正在翻译：{current}/{total} 段落...",
+	"document.translatingFile": "正在翻译文件，请稍候...",
+	"document.openedOnRight": "译文文件已在右侧打开。",
+	"document.noTranslatableContent": "文件中没有可翻译的内容。",
 	"notice.selectText": "请先选择要翻译的文本。",
 	"notice.noParagraph": "光标处没有找到段落。",
 	"notice.notTranslatableParagraph": "当前段落看起来不适合翻译。",
@@ -281,6 +288,7 @@ const ZH_CN: Record<string, string> = {
 	"notice.errorDetailsCopied": "错误详情已复制。",
 	"notice.errorDetailsCopyFailed": "无法复制错误详情。",
 	"notice.translationInsertedBelow": "译文已插入当前段落下方。",
+	"notice.translationCompleted": "译文已生成。",
 	"panel.translation": "Translation",
 	"panel.original": "Original",
 	"panel.pin": "固定面板",
@@ -314,11 +322,13 @@ const ZH_CN: Record<string, string> = {
 	"image.menu.replace": "翻译图片并替换笔记引用",
 	"image.modal.targetLanguage": "目标语言",
 	"image.modal.targetLanguageDesc": "生成图片中可见文字的目标语言。",
+	"image.modal.prompt": "Prompt",
 	"image.modal.promptDesc": "图片编辑指令。",
 	"image.modal.outputFormat": "输出格式",
 	"image.modal.outputFormatDesc": "png、jpeg 或 webp。",
 	"image.modal.translateInsert": "翻译并插入下方",
 	"image.modal.translateReplace": "翻译并替换",
+	"image.modal.translating": "正在翻译图片，请稍候...",
 	"image.modal.failed": "图片翻译失败。",
 	"image.modal.inserted": "译图已插入：{path}",
 	"image.modal.replaced": "图片引用已替换：{path}",
@@ -510,7 +520,9 @@ const EN: Record<string, string> = {
 
 	"settings.image.enable.name": "Enable image translation",
 	"settings.image.enable.desc": "Show image translation actions in image context menus.",
+	"settings.image.apiKey.name": "API key",
 	"settings.image.apiKey.desc": "OpenAI Images API key. Image translation uses separate configuration and does not reuse the translation API.",
+	"settings.image.baseUrl.name": "Base URL",
 	"settings.image.baseUrl.desc": "OpenAI Images API root URL. Compatible proxy URLs are also supported.",
 	"settings.image.model.name": "Image model",
 	"settings.image.model.desc": "OpenAI image editing model used for /images/edits.",
@@ -585,7 +597,12 @@ const EN: Record<string, string> = {
 	"scroll.noScrollable": "No scrollable Markdown panes found. Switch to reading mode or open longer notes.",
 	"scroll.enabled": "Two Markdown panes are now synced.",
 	"document.updated": "Translated file updated.",
+	"document.partialFailure": "Translated file updated, but {count} block(s) failed to translate and will be retried on the next refresh.",
 	"document.updateFailed": "Failed to update translated file: {error}",
+	"document.translatingProgress": "Translating: {current}/{total} paragraphs...",
+	"document.translatingFile": "Translating file, please wait...",
+	"document.openedOnRight": "Translated file opened on the right.",
+	"document.noTranslatableContent": "No translatable content found in the file.",
 	"notice.selectText": "Select text to translate first.",
 	"notice.noParagraph": "No paragraph found at the cursor.",
 	"notice.notTranslatableParagraph": "Current paragraph does not look translatable.",
@@ -595,6 +612,7 @@ const EN: Record<string, string> = {
 	"notice.errorDetailsCopied": "Error details copied.",
 	"notice.errorDetailsCopyFailed": "Unable to copy error details.",
 	"notice.translationInsertedBelow": "Translation inserted below the current paragraph.",
+	"notice.translationCompleted": "Translation completed.",
 	"panel.translation": "Translation",
 	"panel.original": "Original",
 	"panel.pin": "Pin panel",
@@ -628,11 +646,13 @@ const EN: Record<string, string> = {
 	"image.menu.replace": "Translate image and replace in note",
 	"image.modal.targetLanguage": "Target language",
 	"image.modal.targetLanguageDesc": "Language for visible text in the generated image.",
+	"image.modal.prompt": "Prompt",
 	"image.modal.promptDesc": "Instruction for the image edit.",
 	"image.modal.outputFormat": "Output format",
 	"image.modal.outputFormatDesc": "png, jpeg, or webp.",
 	"image.modal.translateInsert": "Translate and insert below",
 	"image.modal.translateReplace": "Translate and replace",
+	"image.modal.translating": "Translating image, please wait...",
 	"image.modal.failed": "Failed to translate image.",
 	"image.modal.inserted": "Translated image inserted: {path}",
 	"image.modal.replaced": "Image reference replaced: {path}",
@@ -836,6 +856,7 @@ const DE: Record<string, string> = {
 	"notice.errorDetailsCopied": "Fehlerdetails kopiert.",
 	"notice.errorDetailsCopyFailed": "Fehlerdetails konnten nicht kopiert werden.",
 	"notice.translationInsertedBelow": "Übersetzung unter dem aktuellen Absatz eingefügt.",
+	"notice.translationCompleted": "Übersetzung abgeschlossen.",
 	"panel.original": "Original",
 	"panel.pin": "Fenster anheften",
 	"panel.unpin": "Anheften lösen",
@@ -1051,6 +1072,7 @@ const JA: Record<string, string> = {
 	"notice.errorDetailsCopied": "エラー詳細をコピーしました。",
 	"notice.errorDetailsCopyFailed": "エラー詳細をコピーできませんでした。",
 	"notice.translationInsertedBelow": "現在の段落の下に訳文を挿入しました。",
+	"notice.translationCompleted": "翻訳が完了しました。",
 	"panel.original": "原文",
 	"panel.pin": "パネルを固定",
 	"panel.unpin": "固定を解除",
@@ -1113,7 +1135,11 @@ export function getLocale(source?: I18nSource): PluginLocale {
 export function t(source: I18nSource, key: string, vars: Record<string, string | number> = {}): string {
 	const locale = getLocale(source);
 	const template = TRANSLATIONS[locale][key] ?? EN[key] ?? ZH_CN[key] ?? key;
-	return template.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`));
+	// Replace all placeholders in one pass to avoid issues with placeholder-like text in variable values
+	return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+		const value = vars[name];
+		return value !== undefined ? String(value) : match;
+	});
 }
 
 export function getLocaleOptions(source?: I18nSource): Record<PluginLanguageSetting, string> {

@@ -1,13 +1,14 @@
 import {TranslationError, requireSetting} from "../errors";
 import {requestJson} from "../http";
 import type {ProviderModelInfo, TranslationProviderAdapter} from "../types";
-import {createUserPrompt, getProviderConfig, getSystemPrompt} from "./shared";
+import {assertNotTruncated, createUserPrompt, getMaxOutputTokens, getProviderConfig, getSystemPrompt} from "./shared";
 
 interface AnthropicResponse {
 	content?: Array<{
 		type?: string;
 		text?: string;
 	}>;
+	stop_reason?: string;
 }
 
 interface AnthropicModelsResponse {
@@ -16,6 +17,8 @@ interface AnthropicModelsResponse {
 		display_name?: string;
 	}>;
 }
+
+const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
 export function createAnthropicAdapter(): TranslationProviderAdapter {
 	return {
@@ -38,12 +41,13 @@ export function createAnthropicAdapter(): TranslationProviderAdapter {
 				},
 				body: JSON.stringify({
 					model,
-					max_tokens: 4096,
+					max_tokens: getMaxOutputTokens(config) ?? DEFAULT_MAX_OUTPUT_TOKENS,
 					temperature: config.temperature,
 					system: getSystemPrompt(request),
 					messages: [{role: "user", content: createUserPrompt(request)}],
 				}),
 			});
+			assertNotTruncated("Claude", result.stop_reason);
 			const text = result.content?.map(item => item.text ?? "").join("").trim() ?? "";
 			if (!text) {
 				throw new TranslationError("Claude returned an empty translation.");

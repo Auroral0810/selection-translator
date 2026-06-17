@@ -42,7 +42,7 @@ export function displayImageTranslationSettings(tab: TranslationSettingTab, el: 
 			}));
 
 	new Setting(el)
-		.setName("API key")
+		.setName(tab.t("settings.image.apiKey.name"))
 		.setDesc(tab.t("settings.image.apiKey.desc"))
 		.addText(text => {
 			text.setPlaceholder("Enter API key")
@@ -56,7 +56,7 @@ export function displayImageTranslationSettings(tab: TranslationSettingTab, el: 
 		});
 
 	new Setting(el)
-		.setName("Base URL")
+		.setName(tab.t("settings.image.baseUrl.name"))
 		.setDesc(tab.t("settings.image.baseUrl.desc"))
 		.addText(text => text
 			.setPlaceholder("https://api.openai.com/v1")
@@ -113,7 +113,9 @@ export function displayImageTranslationSettings(tab: TranslationSettingTab, el: 
 				tab.plugin.settings.imageBaseUrl = draft.imageBaseUrl || "https://api.openai.com/v1";
 				tab.plugin.settings.imageModel = normalizeImageModel(draft.imageModel);
 				tab.plugin.settings.imageOutputFormat = normalizeOutputFormat(draft.imageOutputFormat);
-				tab.plugin.settings.imageTranslationPrompt = draft.imageTranslationPrompt.trim() || tab.plugin.settings.imageTranslationPrompt;
+				// Allow users to intentionally clear the prompt by saving empty string
+				const trimmedPrompt = draft.imageTranslationPrompt.trim();
+				tab.plugin.settings.imageTranslationPrompt = trimmedPrompt;
 				await tab.plugin.saveSettings();
 				new Notice(tab.t("settings.image.saved"), 5000);
 				tab.display();

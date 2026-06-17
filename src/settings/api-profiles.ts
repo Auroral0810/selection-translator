@@ -164,6 +164,7 @@ function renderProviderFields(tab: TranslationSettingTab, el: HTMLElement): void
 			configText(tab, el, draft, "Base URL", "API root URL. OpenAI compatible providers must use their own endpoint.", "baseUrl", provider === "openai-compatible" ? "https://your-provider.example/v1" : "https://...");
 		}
 		renderModelSetting(tab, el, draft);
+		configNumber(tab, el, draft, "Max output tokens", "Maximum translation output tokens for LLM providers. Use 0 to keep the provider default.", "maxOutputTokens", "0");
 	}
 	if (provider === "deepl") {
 		configText(tab, el, draft, "API type", "Use free or pro.", "apiType", "free");
@@ -360,11 +361,39 @@ function configText<K extends keyof TranslationProviderConfig>(
 		text.setPlaceholder(placeholder)
 			.setValue(String(draft[key] ?? ""))
 			.onChange(value => {
-				draft[key] = value as TranslationProviderConfig[K];
+				// Only assign string values to string fields, not to numeric fields
+				if (typeof draft[key] === 'string' || draft[key] === undefined || draft[key] === null) {
+					draft[key] = value as TranslationProviderConfig[K];
+				}
 			});
 		if (secret || (tab.plugin.settings.hideApiKeys && isSecretField(name))) {
 			text.inputEl.type = "password";
 		}
+	});
+}
+
+function configNumber(
+	tab: TranslationSettingTab,
+	el: HTMLElement,
+	draft: TranslationProviderConfig,
+	name: string,
+	desc: string,
+	key: keyof Pick<TranslationProviderConfig, "maxOutputTokens">,
+	placeholder: string
+): void {
+	new Setting(el).setName(name).setDesc(desc).addText(text => {
+		text.setPlaceholder(placeholder)
+			.setValue(String(draft[key] ?? ""))
+			.onChange(value => {
+				const trimmed = value.trim();
+				if (trimmed === "") {
+					draft[key] = 0;
+					return;
+				}
+				const parsed = Number(trimmed);
+				// Use parsed value directly if valid, otherwise keep current or default to 0
+				draft[key] = Number.isFinite(parsed) && parsed > 0 ? parsed : (draft[key] ?? 0);
+			});
 	});
 }
 

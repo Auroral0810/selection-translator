@@ -6,7 +6,7 @@ import type {TranslationSettingTab} from "./tab";
 export function displayPromptTemplateSettings(tab: TranslationSettingTab, el: HTMLElement): void {
 	normalizePromptSelection(tab);
 
-	tab.heading(el, "Prompt");
+	tab.heading(el, tab.t("settings.tabs.prompt"));
 
 	new Setting(el)
 		.setName(tab.t("settings.prompt.name"))

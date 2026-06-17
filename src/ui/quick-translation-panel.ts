@@ -28,6 +28,7 @@ export function closeQuickTranslationPanel(): void {
 
 class QuickTranslationPanel {
 	private readonly rootEl: HTMLElement;
+	private readonly headerEl: HTMLElement;
 	private readonly inputEl: HTMLTextAreaElement;
 	private readonly clearInputButtonEl: HTMLButtonElement;
 	private readonly targetLanguageEl: HTMLSelectElement;
@@ -48,17 +49,23 @@ class QuickTranslationPanel {
 			cls: "selection-translator-quick-panel",
 		});
 
-		const headerEl = this.rootEl.createDiv({
+		// Add ARIA attributes for accessibility
+		this.rootEl.setAttribute("role", "dialog");
+		this.rootEl.setAttribute("aria-modal", "true");
+		this.rootEl.setAttribute("aria-label", t(this.plugin, "quick.title"));
+
+		this.headerEl = this.rootEl.createDiv({
 			cls: "selection-translator-quick-panel-header",
 		});
-		headerEl.addEventListener("pointerdown", this.handlePointerDown);
 
-		headerEl.createDiv({
+		const titleEl = this.headerEl.createDiv({
 			cls: "selection-translator-panel-title",
 			text: t(this.plugin, "quick.title"),
 		});
+		titleEl.id = "selection-translator-quick-panel-title";
+		this.rootEl.setAttribute("aria-labelledby", "selection-translator-quick-panel-title");
 
-		const closeButtonEl = headerEl.createEl("button", {
+		const closeButtonEl = this.headerEl.createEl("button", {
 			cls: "selection-translator-panel-button",
 			attr: {
 				"aria-label": t(this.plugin, "quick.close"),
@@ -141,7 +148,21 @@ class QuickTranslationPanel {
 			cls: "selection-translator-quick-panel-result-text",
 		});
 		this.setResult("");
+		this.registerKeyboardNavigation();
 	}
+
+	private registerKeyboardNavigation(): void {
+		this.rootEl.addEventListener("keydown", this.handleKeyDown);
+	}
+
+	private handleKeyDown = (event: KeyboardEvent): void => {
+		// ESC to close panel
+		if (event.key === "Escape") {
+			this.close();
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	};
 
 	open(options: QuickTranslationPanelOptions): void {
 		this.inputEl.value = options.initialText;
@@ -283,6 +304,12 @@ class QuickTranslationPanel {
 
 	close(): void {
 		this.handlePointerUp();
+
+		// Remove all event listeners to prevent memory leaks
+		this.rootEl.removeEventListener("keydown", this.handleKeyDown);
+		this.headerEl.removeEventListener("pointerdown", this.handlePointerDown);
+		this.inputEl.removeEventListener("input", this.handleInput);
+
 		this.rootEl.remove();
 		this.onClose();
 	}

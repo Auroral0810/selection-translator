@@ -1,3 +1,4 @@
+import {App, Modal} from "obsidian";
 import type TranslationPlugin from "../main";
 import type {BooleanKey, NumberKey} from "./types";
 
@@ -27,17 +28,87 @@ export function displayCacheSettings(host: CacheSettingsHost, el: HTMLElement): 
 		host.plugin.taskLogManager.append(taskId, `After: ${host.plugin.settings.translationCache.length}\n`);
 		host.plugin.taskLogManager.complete(taskId, `Removed ${removed} expired cache entries.`);
 	});
-	host.button(el, translate("settings.cache.clear.name"), translate("settings.cache.clear.desc"), translate("common.reset"), async () => {
-		const taskId = startSettingsTask(host.plugin, translate("settings.cache.clear.name"));
+	host.button(el, translate("settings.cache.clear.name"), translate("settings.cache.clear.desc"), translate("common.reset"), async (button) => {
 		const before = host.plugin.settings.translationCache.length;
-		host.plugin.taskLogManager.append(taskId, `Before: ${before}\n`);
-		host.plugin.translationCache.clear();
-		await host.plugin.saveSettings();
-		host.plugin.taskLogManager.append(taskId, "All translation cache entries cleared.\n");
-		host.plugin.taskLogManager.complete(taskId, `Cleared ${before} translation cache entries.`);
+
+		// Show confirmation dialog for destructive action
+		const confirmed = await showConfirmDialog(
+			host.plugin.app,
+			translate("settings.cache.clear.confirmTitle") || "Clear all cache?",
+			translate("settings.cache.clear.confirmMessage") || `This will permanently delete ${before} cached translations. This action cannot be undone.`
+		);
+
+		if (!confirmed) {
+			return;
+		}
+
+		button.disabled = true;
+		try {
+			const taskId = startSettingsTask(host.plugin, translate("settings.cache.clear.name"));
+			host.plugin.taskLogManager.append(taskId, `Before: ${before}\n`);
+			host.plugin.translationCache.clear();
+			await host.plugin.saveSettings();
+			host.plugin.taskLogManager.append(taskId, "All translation cache entries cleared.\n");
+			host.plugin.taskLogManager.complete(taskId, `Cleared ${before} translation cache entries.`);
+		} finally {
+			button.disabled = false;
+		}
 	});
 }
 
 function startSettingsTask(plugin: TranslationPlugin, title: string): string {
 	return plugin.taskLogManager.startTask(title);
+}
+
+async function showConfirmDialog(app: App, title: string, message: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		const modal = new ConfirmModal(app, title, message, (result) => {
+			resolve(result);
+		});
+		modal.open();
+	});
+}
+
+class ConfirmModal extends Modal {
+	constructor(
+		app: App,
+		private title: string,
+		private message: string,
+		private onResult: (result: boolean) => void
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const {contentEl} = this;
+		contentEl.empty();
+
+		contentEl.createEl("h2", {text: this.title});
+		contentEl.createEl("p", {text: this.message});
+
+		const buttonContainer = contentEl.createDiv({
+			cls: "modal-button-container",
+		});
+
+		buttonContainer.createEl("button", {
+			text: "Cancel",
+			cls: "mod-cancel",
+		}).addEventListener("click", () => {
+			this.onResult(false);
+			this.close();
+		});
+
+		buttonContainer.createEl("button", {
+			text: "Confirm",
+			cls: "mod-warning",
+		}).addEventListener("click", () => {
+			this.onResult(true);
+			this.close();
+		});
+	}
+
+	onClose() {
+		const {contentEl} = this;
+		contentEl.empty();
+	}
 }

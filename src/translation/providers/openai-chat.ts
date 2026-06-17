@@ -1,7 +1,7 @@
 import {TranslationError, requireSetting} from "../errors";
 import {requestJson} from "../http";
 import type {ProviderModelInfo, TranslationProviderAdapter, TranslationProviderId} from "../types";
-import {ChatCompletionResponse, createUserPrompt, getProviderConfig, getSystemPrompt} from "./shared";
+import {ChatCompletionResponse, assertNotTruncated, createUserPrompt, getMaxOutputTokens, getProviderConfig, getSystemPrompt} from "./shared";
 
 interface OpenAIModelsResponse {
 	data?: Array<{
@@ -21,6 +21,16 @@ export function createOpenAIChatAdapter(id: TranslationProviderId, label: string
 			const apiKey = requireSetting(config.apiKey, `${label} API key`);
 			const baseUrl = requireSetting(config.baseUrl, `${label} base URL`).replace(/\/+$/, "");
 			const model = requireSetting(config.model, `${label} model`);
+			const maxOutputTokens = getMaxOutputTokens(config);
+			const body = {
+				model,
+				temperature: config.temperature,
+				messages: [
+					{role: "system", content: getSystemPrompt(request)},
+					{role: "user", content: createUserPrompt(request)},
+				],
+				...(maxOutputTokens ? {max_tokens: maxOutputTokens} : {}),
+			};
 
 			const result = await requestJson<ChatCompletionResponse>({
 				url: `${baseUrl}/chat/completions`,
@@ -30,16 +40,10 @@ export function createOpenAIChatAdapter(id: TranslationProviderId, label: string
 					"Authorization": `Bearer ${apiKey}`,
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({
-					model,
-					temperature: config.temperature,
-					messages: [
-						{role: "system", content: getSystemPrompt(request)},
-						{role: "user", content: createUserPrompt(request)},
-					],
-				}),
+				body: JSON.stringify(body),
 			});
 
+			assertNotTruncated(label, result.choices?.[0]?.finish_reason);
 			const text = result.choices?.[0]?.message?.content?.trim() ?? "";
 			if (!text) {
 				throw new TranslationError(`${label} returned an empty translation.`);

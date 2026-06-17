@@ -41,7 +41,7 @@ export async function translateSelection(plugin: TranslationPlugin, editor: Edit
 			showSourceText: plugin.settings.showSourceText,
 			anchorPoint,
 		});
-		notice.success(t(plugin, "settings.api.testSuccess"));
+		notice.success(t(plugin, "notice.translationCompleted"));
 	} catch (error) {
 		console.error("Failed to translate selection", error);
 		notice.fail(error, {

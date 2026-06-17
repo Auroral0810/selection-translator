@@ -1,5 +1,6 @@
 import type TranslationPlugin from "../main";
 import {TranslationError} from "./errors";
+import {isFatalQueueError} from "./request-queue-service";
 import {getCurrentProviderConfig} from "./provider-config";
 import type {PromptService} from "./prompt-service";
 import {getAdapter} from "./providers";
@@ -51,8 +52,11 @@ export class DefaultTranslateService implements TranslateService {
 			}
 		}
 
+		// Use cache key as queue key to prevent duplicate translations of the same text
+		// This ensures that multiple simultaneous requests for the same text will be deduplicated
 		const queueKey = options.bypassCache ? `${key}:refresh:${Date.now()}` : key;
 		return this.plugin.requestQueueService.enqueue(queueKey, async () => {
+			// Double-check cache inside queue in case another request completed while waiting
 			if (!options.bypassCache) {
 				const cachedInsideQueue = this.plugin.translationCache.get(key);
 				if (cachedInsideQueue !== null) {
@@ -96,6 +100,9 @@ export class DefaultTranslateService implements TranslateService {
 			try {
 				return await adapter.translate(request);
 			} catch (error) {
+				if (isFatalQueueError(error)) {
+					throw error;
+				}
 				lastError = error;
 			}
 		}

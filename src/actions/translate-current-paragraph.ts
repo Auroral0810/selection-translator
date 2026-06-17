@@ -52,7 +52,7 @@ export async function translateCurrentParagraph(plugin: TranslationPlugin, edito
 			showSourceText: plugin.settings.showSourceText,
 			anchorPoint: getCursorAnchorPoint(editor),
 		});
-		notice.success(t(plugin, "settings.api.testSuccess"));
+		notice.success(t(plugin, "notice.translationCompleted"));
 	} catch (error) {
 		console.error("Failed to translate current paragraph", error);
 		notice.fail(error, {
@@ -111,7 +111,13 @@ function getCurrentParagraph(editor: Editor): CurrentParagraph | null {
 		return null;
 	}
 
-	let line = Math.min(editor.getCursor().line, lineCount - 1);
+	let line = editor.getCursor().line;
+	// Ensure line is within valid bounds
+	if (line < 0 || line >= lineCount) {
+		return null;
+	}
+	line = Math.min(line, lineCount - 1);
+
 	if (!editor.getLine(line).trim()) {
 		const nearbyLine = findNearbyNonEmptyLine(editor, line);
 		if (nearbyLine === null) {

@@ -32,10 +32,12 @@ export class TranslationCache {
 	async makeKey(request: TranslateRequest, options: {cacheScope?: string} = {}): Promise<string> {
 		const settings = request.settings;
 		const providerConfig = request.providerConfig ?? settings.currentProviderConfig;
-		const prompt = PROVIDER_KINDS[settings.currentProvider] === "llm" ? request.builtPrompt ?? null : null;
+		const providerKind = PROVIDER_KINDS[settings.currentProvider];
+		const prompt = providerKind === "llm" ? request.builtPrompt ?? null : null;
 		const providerFingerprint = settings.cacheByProvider ? await this.makeProviderFingerprint(settings.currentProvider, providerConfig) : "";
+		const scope = settings.reuseSameTextCache && providerKind !== "llm" ? "shared" : options.cacheScope ?? "general";
 		const parts = [
-			settings.reuseSameTextCache ? "shared" : options.cacheScope ?? "general",
+			scope,
 			request.text.trim(),
 			request.sourceLanguage,
 			settings.cacheByTargetLanguage ? request.targetLanguage : "",
@@ -139,19 +141,19 @@ export class TranslationCache {
 		}
 
 		const sensitiveHash = await sha256Hex([
-			config.apiKey,
-			config.appId,
-			config.appSecret,
-			config.accessKeyId,
+			config.apiKey ?? "",
+			config.appId ?? "",
+			config.appSecret ?? "",
+			config.accessKeyId ?? "",
 		].join("\n---secret---\n"));
 
 		return [
 			provider,
-			config.baseUrl,
-			config.model,
-			String(config.temperature),
-			config.region,
-			config.apiType,
+			config.baseUrl ?? "",
+			config.model ?? "",
+			String(config.temperature ?? ""),
+			config.region ?? "",
+			config.apiType ?? "",
 			sensitiveHash,
 		].join("\n---provider---\n");
 	}
