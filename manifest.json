@@ -1,7 +1,7 @@
 {
 	"id": "selection-translator",
 	"name": "Selection Translator",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"minAppVersion": "1.7.2",
 	"description": "Translate selections, notes, Markdown documents, images, and speech with AI and machine translation providers.",
 	"author": "L.",
