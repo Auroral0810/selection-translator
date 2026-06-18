@@ -21,7 +21,6 @@ export default class TranslationPlugin extends Plugin {
 	ttsService!: TtsService;
 	documentTranslationService!: DocumentTranslationService;
 	immersiveManager!: ImmersiveTranslationManager;
-	sideBySideSyncManager!: SideBySideSyncManager;
 	taskLogManager!: TaskLogManager;
 }
 ```

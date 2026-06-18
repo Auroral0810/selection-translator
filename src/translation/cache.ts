@@ -16,6 +16,9 @@ export interface TranslationCacheStats {
 export interface TranslateWithCacheOptions {
 	bypassCache?: boolean;
 	cacheScope?: string;
+	ignorePromptInCacheKey?: boolean;
+	onCacheHit?: () => void;
+	onCacheMiss?: () => void;
 }
 
 export class TranslationCache {
@@ -29,11 +32,11 @@ export class TranslationCache {
 		this.trim();
 	}
 
-	async makeKey(request: TranslateRequest, options: {cacheScope?: string} = {}): Promise<string> {
+	async makeKey(request: TranslateRequest, options: {cacheScope?: string; ignorePromptInCacheKey?: boolean} = {}): Promise<string> {
 		const settings = request.settings;
 		const providerConfig = request.providerConfig ?? settings.currentProviderConfig;
 		const providerKind = PROVIDER_KINDS[settings.currentProvider];
-		const prompt = providerKind === "llm" ? request.builtPrompt ?? null : null;
+		const prompt = providerKind === "llm" && !options.ignorePromptInCacheKey ? request.builtPrompt ?? null : null;
 		const providerFingerprint = settings.cacheByProvider ? await this.makeProviderFingerprint(settings.currentProvider, providerConfig) : "";
 		const scope = settings.reuseSameTextCache && providerKind !== "llm" ? "shared" : options.cacheScope ?? "general";
 		const parts = [
@@ -103,12 +106,16 @@ export class TranslationCache {
 	}
 
 	close(): void {
+		void this.flush();
+	}
+
+	async flush(): Promise<void> {
 		if (this.saveTimer !== null) {
 			window.clearTimeout(this.saveTimer);
 			this.saveTimer = null;
 		}
 		this.plugin.settings.translationCache = Array.from(this.entries.values());
-		void this.plugin.saveSettings();
+		await this.plugin.saveSettings();
 	}
 
 	private trim(): void {

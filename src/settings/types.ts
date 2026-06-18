@@ -54,13 +54,9 @@ export interface TranslationPluginSettings {
 	enableImmersiveTranslation: boolean;
 	immersiveMode: string;
 	immersiveStyle: string;
-	immersiveMinCharacters: number;
-	immersiveMinWords: number;
-	immersiveSkipTargetLanguage: boolean;
 	immersiveQueueRate: number;
 	immersiveQueueCapacity: number;
 	immersiveCustomCss: string;
-	enablePercentageScrollSync: boolean;
 
 	hideApiKeys: boolean;
 

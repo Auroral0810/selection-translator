@@ -1,9 +1,8 @@
 import type {MarkdownPostProcessorContext} from "obsidian";
 import TranslationPlugin from "../main";
 import {MarkdownTranslationBlock, parseMarkdownTranslationBlocks} from "../markdown/markdown-ast";
-import {shouldTranslateText} from "./filters";
 import {RenderedTranslationTarget} from "./types";
-import {normalizeMarkdownText} from "../translation/text-filter";
+import {isTranslatableMarkdownText, normalizeMarkdownText} from "../translation/text-filter";
 
 interface CandidateElement {
 	element: HTMLElement;
@@ -60,7 +59,7 @@ function collectAstMatchedBlocks(
 		}
 
 		const compact = isCompactBlock(block, candidate.element);
-		if (!shouldTranslateText(sourceText, plugin.settings, getBlockFilterOptions(block.kind, compact))) {
+		if (!isTranslatableMarkdownText(sourceText)) {
 			continue;
 		}
 
@@ -108,7 +107,7 @@ function collectDomFallbackBlocks(
 				},
 			};
 		})
-		.filter(item => shouldTranslateText(item.block.sourceText, plugin.settings, getRenderedBlockFilterOptions(item.element, item.compact)));
+		.filter(item => isTranslatableMarkdownText(item.block.sourceText));
 }
 
 function collectAstCandidates(containerEl: HTMLElement): CandidateElement[] {
@@ -187,26 +186,6 @@ function collectCandidateElements(containerEl: HTMLElement, selector: string): H
 	const elements = containerEl.matches(selector) ? [containerEl] : [];
 	elements.push(...Array.from(containerEl.querySelectorAll<HTMLElement>(selector)));
 	return Array.from(new Set(elements));
-}
-
-function getBlockFilterOptions(kind: MarkdownTranslationBlock["kind"], compact: boolean): {minCharacters: number; minWords: number} | undefined {
-	if (kind === "heading") {
-		return {minCharacters: 2, minWords: 1};
-	}
-	if (compact) {
-		return {minCharacters: 2, minWords: 1};
-	}
-	return undefined;
-}
-
-function getRenderedBlockFilterOptions(element: HTMLElement, compact: boolean): {minCharacters: number; minWords: number} | undefined {
-	if (element.matches("h1, h2, h3, h4, h5, h6")) {
-		return {minCharacters: 2, minWords: 1};
-	}
-	if (compact) {
-		return {minCharacters: 6, minWords: 1};
-	}
-	return undefined;
 }
 
 function getNearestHeadingPath(element: HTMLElement): string[] {

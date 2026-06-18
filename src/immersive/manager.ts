@@ -51,7 +51,12 @@ export class ImmersiveTranslationManager {
 			return;
 		}
 
-		if (this.plugin.documentTranslationService.isActive(file.path)) {
+		if (this.plugin.documentTranslationService.getSourceFileForPath(file.path)) {
+			new Notice(t(this.plugin, "immersive.translatedFile"));
+			return;
+		}
+
+		if (this.plugin.documentTranslationService.isAnyActive(file.path)) {
 			new Notice(t(this.plugin, "immersive.sideBySideActive"));
 			return;
 		}
@@ -291,6 +296,13 @@ export class ImmersiveTranslationManager {
 		}
 		const file = getTFileByPath(this.plugin.app.vault, filePath);
 		return file?.basename ?? filePath.split("/").pop()?.replace(/\.md$/i, "") ?? "";
+	}
+
+	refreshActiveViews(): void {
+		if (this.activePaths.size === 0) {
+			return;
+		}
+		this.rerenderActiveMarkdownViews();
 	}
 
 	private rerenderActiveMarkdownViews(): void {

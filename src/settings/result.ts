@@ -13,5 +13,4 @@ export function displayResultSettings(tab: TranslationSettingTab, el: HTMLElemen
 	tab.toggle(el, tab.t("settings.result.immersive.name"), tab.t("settings.result.immersive.desc"), "enableImmersiveTranslation");
 	tab.dropdown(el, tab.t("settings.result.immersiveMode.name"), tab.t("settings.result.immersiveMode.desc"), "immersiveMode", getImmersiveModeOptions(locale));
 	tab.dropdown(el, tab.t("settings.result.immersiveStyle.name"), tab.t("settings.result.immersiveStyle.desc"), "immersiveStyle", getImmersiveStyleOptions(locale));
-	tab.toggle(el, tab.t("settings.result.scrollSync.name"), tab.t("settings.result.scrollSync.desc"), "enablePercentageScrollSync");
 }

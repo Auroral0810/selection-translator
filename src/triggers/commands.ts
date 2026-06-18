@@ -1,5 +1,5 @@
 import TranslationPlugin from "../main";
-import {openSideBySideTranslation} from "../actions/open-side-by-side-translation";
+import {openBilingualVirtualView} from "../side-by-side/bilingual-virtual-view";
 import {toggleImmersiveTranslation} from "../actions/toggle-immersive-translation";
 import {translateCurrentFile} from "../actions/translate-current-file";
 import {translateCurrentParagraph, translateCurrentParagraphAndInsertBelow} from "../actions/translate-current-paragraph";
@@ -88,16 +88,22 @@ export function registerTranslationCommands(plugin: TranslationPlugin) {
 	});
 
 	plugin.addCommand({
-		id: "open-side-by-side-translation",
-		name: t(plugin, "command.openSideBySide"),
-		callback: () => {
-			void openSideBySideTranslation(plugin);
-		},
-	});
+		id: "open-bilingual-virtual-view",
+		name: t(plugin, "command.openBilingualVirtualView"),
+		checkCallback: (checking: boolean) => {
+			const markdownView = getActiveMarkdownView(plugin);
+			const file = markdownView?.file;
+			if (!file) {
+				return false;
+			}
 
-	plugin.addCommand({
-		id: "toggle-two-pane-scroll-sync",
-		name: t(plugin, "command.toggleScrollSync"),
-		callback: () => plugin.sideBySideSyncManager.toggleForVisibleMarkdownLeaves(),
+			if (!checking) {
+				const sourceFile = plugin.documentTranslationService.getSourceFileForPath(file.path) ?? file;
+				const targetLanguage = plugin.documentTranslationService.getTargetLanguageForPath(file.path) ?? plugin.settings.targetLanguage;
+				void openBilingualVirtualView(plugin, sourceFile, targetLanguage);
+			}
+
+			return true;
+		},
 	});
 }

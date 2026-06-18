@@ -12,10 +12,11 @@ export async function openTranslatedFileOnRight(plugin: TranslationPlugin): Prom
 	}
 
 	const sourceFile = plugin.documentTranslationService.getSourceFileForPath(file.path) ?? file;
-	const isActive = plugin.documentTranslationService.isActive(sourceFile.path);
+	const targetLanguage = plugin.documentTranslationService.getTargetLanguageForPath(file.path) ?? plugin.settings.targetLanguage;
+	const isCurrent = await plugin.documentTranslationService.isTranslationCurrent(sourceFile, targetLanguage);
 
 	let loadingNotice: Notice | null = null;
-	if (!isActive) {
+	if (!isCurrent) {
 		loadingNotice = new Notice(
 			t(plugin, "document.translatingFile"),
 			0
@@ -23,19 +24,16 @@ export async function openTranslatedFileOnRight(plugin: TranslationPlugin): Prom
 	}
 
 	try {
-		if (isActive) {
-			await plugin.documentTranslationService.refresh(sourceFile);
-		} else {
-			await plugin.documentTranslationService.openSideBySide(sourceFile);
-		}
+		// Always open/focus the translated file on the right. openSideBySide skips
+		// re-translating when the translation is already current, so this is cheap
+		// for the reuse case and guarantees the user actually sees the result.
+		await plugin.documentTranslationService.openSideBySide(sourceFile, targetLanguage);
 
 		if (loadingNotice) {
 			loadingNotice.hide();
 		}
 
-		if (!isActive) {
-			new Notice(`✅ ${t(plugin, "document.openedOnRight")}`, 3000);
-		}
+		new Notice(`✅ ${t(plugin, isCurrent ? "document.reusedTranslation" : "document.openedOnRight")}`, 3000);
 	} catch (error) {
 		if (loadingNotice) {
 			loadingNotice.hide();

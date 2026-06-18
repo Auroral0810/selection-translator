@@ -5,16 +5,19 @@ import {TranslatedFileSyncService} from "./translated-file-sync";
 import {TranslatedFileSyncStore} from "./translated-file-sync-store";
 
 export interface DocumentTranslationService {
-	openSideBySide(sourceFile: TFile): Promise<TFile>;
-	toggleSideBySide(sourceFile: TFile): Promise<"opened" | "closed">;
-	translateFile(sourceFile: TFile): Promise<TFile>;
-	refresh(sourceFile: TFile): Promise<void>;
-	isActive(sourcePath: string): boolean;
+	openSideBySide(sourceFile: TFile, targetLanguage?: string): Promise<TFile>;
+	toggleSideBySide(sourceFile: TFile, targetLanguage?: string): Promise<"opened" | "closed">;
+	translateFile(sourceFile: TFile, targetLanguage?: string): Promise<TFile>;
+	refresh(sourceFile: TFile, targetLanguage?: string): Promise<void>;
+	isActive(sourcePath: string, targetLanguage?: string): boolean;
+	isAnyActive(sourcePath: string): boolean;
 	getSourceFileForPath(path: string): TFile | null;
-	closeSideBySide(sourcePath: string): void;
-	stop(sourcePath: string): void;
+	getTargetLanguageForPath(path: string): string | null;
+	closeSideBySide(sourcePath: string, targetLanguage?: string): void;
+	stop(sourcePath: string, targetLanguage?: string): void;
 	stopAll(): void;
-	findLinkedTranslatedFile(sourceFile: TFile): Promise<TFile | null>;
+	findLinkedTranslatedFile(sourceFile: TFile, targetLanguage?: string): Promise<TFile | null>;
+	isTranslationCurrent(sourceFile: TFile, targetLanguage?: string): Promise<boolean>;
 	register(): void;
 }
 
@@ -29,50 +32,57 @@ export class DefaultDocumentTranslationService implements DocumentTranslationSer
 
 	register(): void {
 		this.syncService.register();
+		void this.syncStore.removeMissingLinks();
 		this.plugin.app.workspace.onLayoutReady(() => {
 			void this.restoreOpenSideBySideSessions();
 		});
 	}
 
-	async openSideBySide(sourceFile: TFile): Promise<TFile> {
+	async openSideBySide(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<TFile> {
 		this.plugin.immersiveManager.disableFile(sourceFile.path);
-		const translatedFile = await this.translateFile(sourceFile);
-		const sourceLeaf = this.plugin.app.workspace.getLeaf(false);
+		const translatedFile = await this.translateFile(sourceFile, targetLanguage);
+		await this.ensureSourceLeaf(sourceFile);
 		const translatedLeaf = this.findOpenLeaf(translatedFile.path) ?? this.plugin.app.workspace.getLeaf("split", "vertical");
 		await translatedLeaf.openFile(translatedFile, {
 			active: false,
 			state: {mode: "preview"},
 		});
-		if (sourceLeaf && this.plugin.settings.enablePercentageScrollSync) {
-			this.plugin.sideBySideSyncManager.enableForLeaves(sourceLeaf, translatedLeaf);
-		}
 		return translatedFile;
 	}
 
-	async toggleSideBySide(sourceFile: TFile): Promise<"opened" | "closed"> {
-		if (this.syncService.isActive(sourceFile.path)) {
-			this.closeSideBySide(sourceFile.path);
+	async toggleSideBySide(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<"opened" | "closed"> {
+		if (this.syncService.isActive(sourceFile.path, targetLanguage)) {
+			this.closeSideBySide(sourceFile.path, targetLanguage);
 			return "closed";
 		}
 
-		await this.openSideBySide(sourceFile);
+		await this.openSideBySide(sourceFile, targetLanguage);
 		return "opened";
 	}
 
-	async translateFile(sourceFile: TFile): Promise<TFile> {
-		return this.syncService.createOrRefreshTranslatedFile(sourceFile);
+	async translateFile(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<TFile> {
+		return this.syncService.createOrRefreshTranslatedFile(sourceFile, targetLanguage);
 	}
 
-	async refresh(sourceFile: TFile): Promise<void> {
-		await this.syncService.refresh(sourceFile);
+	async refresh(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<void> {
+		await this.syncService.ensureSession(sourceFile, targetLanguage);
+		await this.syncService.refreshExisting(sourceFile, targetLanguage);
 	}
 
-	isActive(sourcePath: string): boolean {
-		if (this.syncService.isActive(sourcePath)) {
+	isActive(sourcePath: string, targetLanguage = this.plugin.settings.targetLanguage): boolean {
+		if (this.syncService.isActive(sourcePath, targetLanguage)) {
 			return true;
 		}
 		const link = this.syncStore.findLinkByTranslatedPath(sourcePath);
-		return !!link && this.syncService.isActive(link.sourcePath);
+		return !!link && this.syncService.isActive(link.sourcePath, link.targetLanguage);
+	}
+
+	isAnyActive(sourcePath: string): boolean {
+		if (this.syncService.isAnyActive(sourcePath)) {
+			return true;
+		}
+		const link = this.syncStore.findLinkByTranslatedPath(sourcePath);
+		return !!link && this.syncService.isAnyActive(link.sourcePath);
 	}
 
 	getSourceFileForPath(path: string): TFile | null {
@@ -80,10 +90,13 @@ export class DefaultDocumentTranslationService implements DocumentTranslationSer
 		return link ? getTFileByPath(this.plugin.app.vault, link.sourcePath) : null;
 	}
 
-	closeSideBySide(sourcePath: string): void {
-		const translatedPath = this.syncService.getTranslatedPath(sourcePath) ?? this.syncStore.findLinkForSource(sourcePath)?.translatedPath ?? null;
-		this.syncService.stop(sourcePath);
-		this.plugin.sideBySideSyncManager.disable();
+	getTargetLanguageForPath(path: string): string | null {
+		return this.syncStore.findLinkByTranslatedPath(path)?.targetLanguage ?? null;
+	}
+
+	closeSideBySide(sourcePath: string, targetLanguage = this.plugin.settings.targetLanguage): void {
+		const translatedPath = this.syncService.getTranslatedPath(sourcePath, targetLanguage) ?? this.syncStore.findLinkForSource(sourcePath, targetLanguage)?.translatedPath ?? null;
+		this.syncService.stop(sourcePath, targetLanguage);
 		if (!translatedPath) {
 			return;
 		}
@@ -92,40 +105,36 @@ export class DefaultDocumentTranslationService implements DocumentTranslationSer
 		translatedLeaf?.detach();
 	}
 
-	stop(sourcePath: string): void {
-		this.syncService.stop(sourcePath);
+	stop(sourcePath: string, targetLanguage = this.plugin.settings.targetLanguage): void {
+		this.syncService.stop(sourcePath, targetLanguage);
 	}
 
 	stopAll(): void {
 		this.syncService.stopAll();
 	}
 
-	findLinkedTranslatedFile(sourceFile: TFile): Promise<TFile | null> {
-		return this.syncStore.findLinkedTranslatedFile(sourceFile);
+	findLinkedTranslatedFile(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<TFile | null> {
+		return this.syncStore.findLinkedTranslatedFile(sourceFile, targetLanguage);
+	}
+
+	isTranslationCurrent(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<boolean> {
+		return this.syncStore.isLinkedTranslationCurrent(sourceFile, targetLanguage);
 	}
 
 	private async restoreOpenSideBySideSessions(): Promise<void> {
 		const openMarkdown = this.getOpenMarkdownFiles();
 		const openByPath = new Map(openMarkdown.map(item => [item.file.path, item]));
-		let restoredScrollSync = false;
 
 		for (const source of openMarkdown) {
-			const link = this.syncStore.findLinkForSource(source.file.path);
-			if (!link) {
-				continue;
-			}
+			for (const link of this.syncStore.findLinksForSource(source.file.path)) {
+				const translated = openByPath.get(link.translatedPath);
+				if (!translated) {
+					continue;
+				}
 
-			const translated = openByPath.get(link.translatedPath);
-			if (!translated) {
-				continue;
+				this.syncService.start(source.file, translated.file, link.targetLanguage);
+				await this.syncService.refreshExisting(source.file, link.targetLanguage);
 			}
-
-			this.syncService.start(source.file, translated.file);
-			if (this.plugin.settings.enablePercentageScrollSync && !restoredScrollSync) {
-				this.plugin.sideBySideSyncManager.enableForLeaves(source.leaf, translated.leaf);
-				restoredScrollSync = true;
-			}
-			await this.syncService.refresh(source.file);
 		}
 	}
 
@@ -148,5 +157,21 @@ export class DefaultDocumentTranslationService implements DocumentTranslationSer
 			}
 		}
 		return null;
+	}
+
+	private async ensureSourceLeaf(sourceFile: TFile): Promise<WorkspaceLeaf | null> {
+		const sourceLeaf = this.findOpenLeaf(sourceFile.path) ?? this.plugin.app.workspace.getLeaf(false);
+		if (!sourceLeaf) {
+			return null;
+		}
+
+		const view = sourceLeaf.view;
+		if (!(view instanceof MarkdownView) || view.file?.path !== sourceFile.path) {
+			await sourceLeaf.openFile(sourceFile, {
+				active: false,
+				state: {mode: "preview"},
+			});
+		}
+		return sourceLeaf;
 	}
 }

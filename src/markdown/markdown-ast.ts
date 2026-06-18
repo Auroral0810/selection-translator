@@ -27,6 +27,10 @@ export interface MarkdownTranslationReplacement {
 	translatedText: string;
 }
 
+export interface RenderTranslatedMarkdownOptions {
+	includeSyncAnchors?: boolean;
+}
+
 export interface ProtectedToken {
 	token: string;
 	value: string;
@@ -42,8 +46,9 @@ interface PendingBlock {
 }
 
 const markdownParser = parser.configure([GFM]);
-const TRANSLATABLE_NODE_NAMES = new Set(["Paragraph", "Task"]);
+const TRANSLATABLE_NODE_NAMES = new Set(["Paragraph", "Task", "HTMLBlock"]);
 const SKIP_ANCESTOR_NAMES = new Set(["FencedCode", "CodeBlock", "HTMLBlock", "TableCell"]);
+export const TRANSLATION_SYNC_ANCHOR_PREFIX = "selection-translator-anchor:";
 
 export function parseMarkdownTranslationBlocks(markdown: string): MarkdownTranslationBlock[] {
 	const tree = markdownParser.parse(markdown);
@@ -96,12 +101,16 @@ export function parseMarkdownTranslationBlocks(markdown: string): MarkdownTransl
 	return dedupeOverlappingBlocks(blocks);
 }
 
-export function renderTranslatedMarkdown(markdown: string, replacements: MarkdownTranslationReplacement[]): string {
+export function renderTranslatedMarkdown(
+	markdown: string,
+	replacements: MarkdownTranslationReplacement[],
+	options: RenderTranslatedMarkdownOptions = {},
+): string {
 	const ordered = [...replacements].sort((a, b) => b.block.from - a.block.from);
 	let output = markdown;
 
 	for (const item of ordered) {
-		const rendered = renderBlockTranslation(item.block, item.translatedText);
+		const rendered = renderBlockTranslation(item.block, item.translatedText, options);
 		output = `${output.slice(0, item.block.from)}${rendered}${output.slice(item.block.to)}`;
 	}
 
@@ -163,7 +172,7 @@ function createTableCellBlock(markdown: string, node: SyntaxNode, headingPath: s
 }
 
 function createTextBlock(markdown: string, node: SyntaxNode, headingPath: string[]): PendingBlock | null {
-	if (hasAncestor(node, SKIP_ANCESTOR_NAMES)) {
+	if (node.name !== "HTMLBlock" && hasAncestor(node, SKIP_ANCESTOR_NAMES)) {
 		return null;
 	}
 
@@ -263,31 +272,57 @@ function protectInlineMarkdown(markdown: string, from: number, to: number, text:
 	return {text: protectedText, tokens};
 }
 
-function renderBlockTranslation(block: MarkdownTranslationBlock, translatedText: string): string {
-	const restored = restoreProtectedTokens(translatedText.trim(), block.protectedTokens);
-	if (block.kind === "blockquote") {
-		return renderBlockquote(restored);
-	}
-	if (block.kind === "callout-body") {
-		return renderCallout(block.sourceText, restored);
-	}
-	return restored;
+export function encodeTranslationSyncAnchor(blockId: string): string {
+	return `${TRANSLATION_SYNC_ANCHOR_PREFIX}${encodeURIComponent(blockId)}`;
 }
 
-function renderBlockquote(text: string): string {
-	return text
+export function decodeTranslationSyncAnchor(value: string): string | null {
+	const trimmed = value.trim();
+	if (!trimmed.startsWith(TRANSLATION_SYNC_ANCHOR_PREFIX)) {
+		return null;
+	}
+
+	try {
+		return decodeURIComponent(trimmed.slice(TRANSLATION_SYNC_ANCHOR_PREFIX.length));
+	} catch {
+		return null;
+	}
+}
+
+function renderBlockTranslation(
+	block: MarkdownTranslationBlock,
+	translatedText: string,
+	options: RenderTranslatedMarkdownOptions,
+): string {
+	const restored = restoreProtectedTokens(translatedText.trim(), block.protectedTokens);
+	const anchor = options.includeSyncAnchors ? `<!-- ${encodeTranslationSyncAnchor(block.id)} -->` : "";
+	if (block.kind === "blockquote") {
+		return renderBlockquote(restored, anchor);
+	}
+	if (block.kind === "callout-body") {
+		return renderCallout(block.sourceText, restored, anchor);
+	}
+	return `${anchor}${restored}`;
+}
+
+function renderBlockquote(text: string, anchor = ""): string {
+	const lines = text
 		.split("\n")
 		.map(line => `> ${line}`)
 		.join("\n");
+	return anchor ? `> ${anchor}\n${lines}` : lines;
 }
 
-function renderCallout(source: string, translatedText: string): string {
+function renderCallout(source: string, translatedText: string, anchor = ""): string {
 	const lines = source.split("\n");
 	const firstLine = lines[0] ?? "";
 	const body = translatedText
 		.split("\n")
 		.filter(line => line.trim().length > 0)
 		.map(line => `> ${line}`);
+	if (anchor) {
+		body.unshift(`> ${anchor}`);
+	}
 	return [firstLine, ...body].join("\n");
 }
 
@@ -336,6 +371,10 @@ function collectManualSkipRanges(markdown: string): Array<{from: number; to: num
 	for (const match of markdown.matchAll(/(^|\n)\$\$\s*\n[\s\S]*?\n\$\$\s*(?=\n|$)/g)) {
 		const from = (match.index ?? 0) + (match[1] ? 1 : 0);
 		ranges.push({from, to: (match.index ?? 0) + match[0].length});
+	}
+
+	for (const match of markdown.matchAll(/<!--\s*selection-translator-anchor:[\s\S]*?-->/g)) {
+		ranges.push({from: match.index ?? 0, to: (match.index ?? 0) + match[0].length});
 	}
 
 	return ranges;

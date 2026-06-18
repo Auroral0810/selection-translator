@@ -6,7 +6,7 @@ import {registerImageContextMenus} from "./triggers/image-context-menu";
 import {registerTranslationRibbon} from "./triggers/ribbon";
 import {DefaultDocumentTranslationService, DocumentTranslationService} from "./document/document-translation-service";
 import {ImmersiveTranslationManager} from "./immersive/manager";
-import {SideBySideSyncManager} from "./side-by-side/scroll-sync";
+import {BILINGUAL_VIRTUAL_VIEW_TYPE, BilingualVirtualView} from "./side-by-side/bilingual-virtual-view";
 import {closeQuickTranslationPanel} from "./ui/quick-translation-panel";
 import {TaskLogManager} from "./ui/task-log-panel";
 import {closeTranslationPanel, rememberTranslationPointerPosition} from "./ui/translation-panel";
@@ -29,7 +29,6 @@ export default class TranslationPlugin extends Plugin {
 	ttsService!: TtsService;
 	documentTranslationService!: DocumentTranslationService;
 	immersiveManager!: ImmersiveTranslationManager;
-	sideBySideSyncManager!: SideBySideSyncManager;
 	taskLogManager!: TaskLogManager;
 
 	async onload() {
@@ -49,11 +48,10 @@ export default class TranslationPlugin extends Plugin {
 		this.documentTranslationService = new DefaultDocumentTranslationService(this);
 		this.translationCache.cleanExpired();
 		this.immersiveManager = new ImmersiveTranslationManager(this);
-		this.sideBySideSyncManager = new SideBySideSyncManager(this);
 		this.taskLogManager = new TaskLogManager(this);
 		this.immersiveManager.register();
-		this.sideBySideSyncManager.register();
 		this.documentTranslationService.register();
+		this.registerView(BILINGUAL_VIRTUAL_VIEW_TYPE, leaf => new BilingualVirtualView(leaf, this));
 		registerTranslationCommands(this);
 		registerEditorMenu(this);
 		registerImageContextMenus(this);
@@ -65,7 +63,6 @@ export default class TranslationPlugin extends Plugin {
 	onunload() {
 		this.requestQueueService?.clear();
 		this.immersiveManager?.stopAll();
-		this.sideBySideSyncManager?.closeAll();
 		this.documentTranslationService?.stopAll();
 		this.ttsService?.stop();
 		this.translationCache?.close();

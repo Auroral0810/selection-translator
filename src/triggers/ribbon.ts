@@ -1,9 +1,10 @@
 import {Menu, Notice, TFile} from "obsidian";
 import {t} from "../i18n";
 import TranslationPlugin from "../main";
-import {openSideBySideTranslation} from "../actions/open-side-by-side-translation";
+import {openBilingualVirtualView} from "../side-by-side/bilingual-virtual-view";
 import {toggleImmersiveTranslation} from "../actions/toggle-immersive-translation";
 import {translateCurrentFile} from "../actions/translate-current-file";
+import {translateCurrentParagraph} from "../actions/translate-current-paragraph";
 import {getActiveMarkdownView, translateSelection} from "../actions/translate-selection";
 import {showQuickTranslationPanel} from "../ui/quick-translation-panel";
 
@@ -12,10 +13,8 @@ export function registerTranslationRibbon(plugin: TranslationPlugin) {
 		updateRibbonState(plugin, ribbonEl);
 		const menu = new Menu();
 		const activeFile = plugin.app.workspace.getActiveFile();
-		const sideBySideSourceFile = getSideBySideSourceFile(plugin, activeFile);
+		const sideBySideContext = getSideBySideContext(plugin, activeFile);
 		const immersiveActive = plugin.immersiveManager.isActiveForCurrentFile();
-		const sideBySideActive = sideBySideSourceFile ? plugin.documentTranslationService.isActive(sideBySideSourceFile.path) : false;
-		const scrollSyncActive = plugin.sideBySideSyncManager.isEnabled();
 
 		menu.addItem(item => item
 			.setTitle(t(plugin, "command.translateSelection"))
@@ -29,6 +28,20 @@ export function registerTranslationRibbon(plugin: TranslationPlugin) {
 				}
 
 				void translateSelection(plugin, markdownView.editor);
+			}));
+
+		menu.addItem(item => item
+			.setTitle(t(plugin, "command.translateCurrentParagraph"))
+			.setIcon("languages")
+			.onClick(() => {
+				const markdownView = getActiveMarkdownView(plugin);
+
+				if (!markdownView) {
+					new Notice(t(plugin, "notice.openMarkdownSelection"));
+					return;
+				}
+
+				void translateCurrentParagraph(plugin, markdownView.editor);
 			}));
 
 		menu.addItem(item => item
@@ -58,45 +71,20 @@ export function registerTranslationRibbon(plugin: TranslationPlugin) {
 				updateRibbonState(plugin, ribbonEl);
 			}));
 
-		if (!sideBySideSourceFile) {
+		if (!sideBySideContext) {
 			menu.addItem(item => item
 				.setTitle(t(plugin, "menu.openMarkdownRequired"))
-				.setIcon("book-open-text")
+				.setIcon("book-open")
 				.setDisabled(true));
-		} else if (sideBySideActive) {
-			menu.addItem(item => item
-				.setTitle(t(plugin, "menu.refreshSideBySide"))
-				.setIcon("refresh-cw")
-				.onClick(() => {
-					void plugin.documentTranslationService.refresh(sideBySideSourceFile);
-					window.setTimeout(() => updateRibbonState(plugin, ribbonEl), 250);
-				}));
-
-			menu.addItem(item => item
-				.setTitle(t(plugin, "menu.closeSideBySide"))
-				.setIcon("panel-right-close")
-				.onClick(() => {
-					plugin.documentTranslationService.closeSideBySide(sideBySideSourceFile.path);
-					new Notice(t(plugin, "notice.sideBySideClosed"));
-					updateRibbonState(plugin, ribbonEl);
-				}));
 		} else {
 			menu.addItem(item => item
-				.setTitle(t(plugin, "menu.sideBySide"))
-				.setIcon("book-open-text")
+				.setTitle(t(plugin, "menu.openBilingualReader"))
+				.setIcon("book-open")
 				.onClick(() => {
-					void openSideBySideTranslation(plugin);
+					void openBilingualVirtualView(plugin, sideBySideContext.sourceFile, sideBySideContext.targetLanguage);
 					window.setTimeout(() => updateRibbonState(plugin, ribbonEl), 250);
 				}));
 		}
-
-		menu.addItem(item => item
-			.setTitle(scrollSyncActive ? t(plugin, "menu.stopScrollSync") : t(plugin, "menu.syncScroll"))
-			.setIcon(scrollSyncActive ? "unlink" : "move-vertical")
-			.onClick(() => {
-				plugin.sideBySideSyncManager.toggleForVisibleMarkdownLeaves();
-				window.setTimeout(() => updateRibbonState(plugin, ribbonEl), 250);
-			}));
 
 		menu.showAtMouseEvent(event);
 	});
@@ -109,18 +97,27 @@ export function registerTranslationRibbon(plugin: TranslationPlugin) {
 	update();
 }
 
-function getSideBySideSourceFile(plugin: TranslationPlugin, file: TFile | null): TFile | null {
+function getSideBySideContext(plugin: TranslationPlugin, file: TFile | null): {sourceFile: TFile; targetLanguage: string} | null {
 	if (!file || file.extension !== "md") {
 		return null;
 	}
-	return plugin.documentTranslationService.getSourceFileForPath(file.path) ?? file;
+	const sourceFile = plugin.documentTranslationService.getSourceFileForPath(file.path);
+	if (sourceFile) {
+		return {
+			sourceFile,
+			targetLanguage: plugin.documentTranslationService.getTargetLanguageForPath(file.path) ?? plugin.settings.targetLanguage,
+		};
+	}
+	return {
+		sourceFile: file,
+		targetLanguage: plugin.settings.targetLanguage,
+	};
 }
 
 function updateRibbonState(plugin: TranslationPlugin, ribbonEl: HTMLElement): void {
 	const file = plugin.app.workspace.getActiveFile();
-	const sideBySideSourceFile = getSideBySideSourceFile(plugin, file);
+	const sideBySideContext = getSideBySideContext(plugin, file);
 	const hasActiveMode = plugin.immersiveManager.isActiveForCurrentFile()
-		|| (sideBySideSourceFile ? plugin.documentTranslationService.isActive(sideBySideSourceFile.path) : false)
-		|| plugin.sideBySideSyncManager.isEnabled();
+		|| (sideBySideContext ? plugin.documentTranslationService.isActive(sideBySideContext.sourceFile.path, sideBySideContext.targetLanguage) : false);
 	ribbonEl.toggleClass("selection-translator-ribbon-active", hasActiveMode);
 }

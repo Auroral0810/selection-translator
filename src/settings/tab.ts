@@ -52,10 +52,6 @@ export class TranslationSettingTab extends PluginSettingTab {
 		this.heading(el, this.t("settings.advanced.heading"));
 		displayCacheSettings(this, el);
 
-		this.subheading(el, this.t("settings.advanced.immersiveFilter.heading"));
-		this.number(el, this.t("settings.advanced.minCharacters.name"), this.t("settings.advanced.minCharacters.desc"), "immersiveMinCharacters", 0, 1000);
-		this.number(el, this.t("settings.advanced.minWords.name"), this.t("settings.advanced.minWords.desc"), "immersiveMinWords", 0, 200);
-		this.toggle(el, this.t("settings.advanced.skipTarget.name"), this.t("settings.advanced.skipTarget.desc"), "immersiveSkipTargetLanguage");
 		this.textarea(el, this.t("settings.advanced.customCss.name"), this.t("settings.advanced.customCss.desc"), "immersiveCustomCss");
 
 		this.subheading(el, this.t("settings.advanced.privacy.heading"));
@@ -153,7 +149,7 @@ export class TranslationSettingTab extends PluginSettingTab {
 		});
 	}
 
-	dropdown<K extends StringKey>(el: HTMLElement, name: string, desc: string, key: K, options: Record<string, string>, rerender = false): void {
+	dropdown<K extends StringKey>(el: HTMLElement, name: string, desc: string, key: K, options: Record<string, string>, rerender = false, onChange?: (value: string) => void): void {
 		new Setting(el).setName(name).setDesc(desc).addDropdown(dropdown => {
 			for (const [value, label] of Object.entries(options)) {
 				dropdown.addOption(value, label);
@@ -161,6 +157,7 @@ export class TranslationSettingTab extends PluginSettingTab {
 			dropdown.setValue(this.plugin.settings[key] as string).onChange(async value => {
 				this.plugin.settings[key] = value as never;
 				await this.plugin.saveSettings();
+				onChange?.(value);
 				if (rerender) {
 					this.display();
 				}

@@ -43,6 +43,7 @@ export class DefaultTranslateService implements TranslateService {
 			const cached = this.plugin.translationCache.get(key);
 			if (cached !== null) {
 				this.plugin.translationMetrics.recordCacheHit();
+				options.onCacheHit?.();
 				return {
 					text: cached,
 					provider: preparedRequest.settings.currentProvider,
@@ -61,6 +62,7 @@ export class DefaultTranslateService implements TranslateService {
 				const cachedInsideQueue = this.plugin.translationCache.get(key);
 				if (cachedInsideQueue !== null) {
 					this.plugin.translationMetrics.recordCacheHit();
+					options.onCacheHit?.();
 					return {
 						text: cachedInsideQueue,
 						provider: preparedRequest.settings.currentProvider,
@@ -71,6 +73,7 @@ export class DefaultTranslateService implements TranslateService {
 			}
 
 			this.plugin.translationMetrics.recordCacheMiss();
+			options.onCacheMiss?.();
 			const result = await this.translateOnceWithMetrics(preparedRequest);
 			this.plugin.translationCache.put(key, result.text);
 			return result;

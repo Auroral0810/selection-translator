@@ -1,13 +1,11 @@
 import {Setting} from "obsidian";
 import {getDefaultProviderConfig, PROVIDER_KINDS, PROVIDER_LABELS} from "../translation/provider-config";
 import type {ProviderModelInfo, TranslationProviderConfig, TranslationProviderId, TranslationProviderKind} from "../translation/types";
-import {getLanguageLabel} from "./defaults";
 import {AI_PROVIDER_CHOICES, CUSTOM_MODEL_VALUE, MACHINE_PROVIDER_CHOICES, formatModelOption, getModelSelectValue} from "./provider-config-utils";
 import type {TranslationSettingTab} from "./tab";
 
 const modelCache = new Map<TranslationProviderId, ProviderModelInfo[]>();
 const customModelProviders = new Set<TranslationProviderId>();
-let showQuickStartDetails = false;
 
 const READONLY_BASE_URL_PROVIDERS = new Set<TranslationProviderId>([
 	"openai",
@@ -22,48 +20,10 @@ const READONLY_BASE_URL_PROVIDERS = new Set<TranslationProviderId>([
 
 export function displayApiProfileSettings(tab: TranslationSettingTab, el: HTMLElement): void {
 	tab.heading(el, tab.t("settings.api.heading"));
-	renderQuickStart(tab, el);
 	renderCurrentProvider(tab, el);
 	renderProviderPickerSection(tab, el, tab.t("settings.api.ai.heading"), tab.t("settings.api.ai.desc"), "llm", AI_PROVIDER_CHOICES);
 	renderProviderPickerSection(tab, el, tab.t("settings.api.machine.heading"), tab.t("settings.api.machine.desc"), "pure-translation", MACHINE_PROVIDER_CHOICES);
 	renderRequestSettings(tab, el);
-}
-
-function renderQuickStart(tab: TranslationSettingTab, el: HTMLElement): void {
-	const provider = tab.plugin.settings.currentProvider;
-	const config = tab.plugin.settings.currentProviderConfig;
-	const issues = getProviderConfigIssues(provider, config);
-	const configured = issues.length === 0;
-	const summary = tab.t("settings.api.quickStart.summary", {
-		provider: PROVIDER_LABELS[provider],
-		model: getProviderModelSummary(tab, config),
-		language: getLanguageLabel(tab.plugin.settings.targetLanguage, tab.plugin.settings.pluginLanguage),
-	});
-
-	new Setting(el)
-		.setName(tab.t("settings.api.quickStart.name"))
-		.setDesc(configured ? summary : tab.t("settings.api.quickStart.missing", {count: issues.length, items: issues.join(", ")}))
-		.addButton(button => button
-			.setButtonText(configured && !showQuickStartDetails ? tab.t("common.expand") : tab.t("common.collapse"))
-			.onClick(() => {
-				showQuickStartDetails = !showQuickStartDetails;
-				tab.display();
-			}));
-
-	if (configured && !showQuickStartDetails) {
-		return;
-	}
-
-	tab.static(el, tab.t("settings.api.quickStart.stepProvider"), `${PROVIDER_LABELS[provider]} / ${getKindLabel(tab, PROVIDER_KINDS[provider])}`);
-	tab.static(el, tab.t("settings.api.quickStart.stepConfig"), configured ? tab.t("common.enabled") : issues.join(", "));
-	tab.static(el, tab.t("settings.api.quickStart.stepTarget"), getLanguageLabel(tab.plugin.settings.targetLanguage, tab.plugin.settings.pluginLanguage));
-	new Setting(el)
-		.setName(tab.t("settings.api.quickStart.stepTest"))
-		.setDesc(tab.t("settings.api.quickStart.stepTestDesc"))
-		.addButton(button => button
-			.setButtonText(tab.t("settings.api.testTranslation"))
-			.setCta()
-			.onClick(() => testTranslation(tab)));
 }
 
 function renderCurrentProvider(tab: TranslationSettingTab, el: HTMLElement): void {
@@ -185,16 +145,16 @@ function renderReadonlyBaseUrl(el: HTMLElement, config: TranslationProviderConfi
 function renderModelSetting(tab: TranslationSettingTab, el: HTMLElement, draft: TranslationProviderConfig): void {
 	const provider = tab.plugin.settings.currentProvider;
 	const cachedModels = modelCache.get(provider) ?? [];
+	const hasModels = cachedModels.length > 0;
+	const force = customModelProviders.has(provider);
+	const customMode = !hasModels || getModelSelectValue(draft, cachedModels, force) === CUSTOM_MODEL_VALUE;
+
 	const setting = new Setting(el)
 		.setName("Model")
-		.setDesc(cachedModels.length > 0 ? tab.t("settings.api.model.descWithCache", {count: cachedModels.length}) : tab.t("settings.api.model.descEmpty"));
+		.setDesc(hasModels ? tab.t("settings.api.model.descWithCache", {count: cachedModels.length}) : tab.t("settings.api.model.descEmpty"));
 
-	if (cachedModels.length > 0) {
+	if (hasModels) {
 		setting.addDropdown(dropdown => {
-			const selectValue = getModelSelectValue(draft, cachedModels, customModelProviders.has(provider));
-			if (draft.model && selectValue === CUSTOM_MODEL_VALUE && !customModelProviders.has(provider)) {
-				dropdown.addOption(CUSTOM_MODEL_VALUE, `${tab.t("settings.api.model.custom")} ${draft.model}`);
-			}
 			if (!draft.model) {
 				dropdown.addOption("", tab.t("settings.api.model.pick"));
 			}
@@ -202,21 +162,23 @@ function renderModelSetting(tab: TranslationSettingTab, el: HTMLElement, draft: 
 				dropdown.addOption(model.id, formatModelOption(model));
 			}
 			dropdown.addOption(CUSTOM_MODEL_VALUE, tab.t("settings.api.model.custom"));
-			dropdown.setValue(selectValue);
+			dropdown.setValue(customMode ? CUSTOM_MODEL_VALUE : draft.model);
 			dropdown.onChange(value => {
-				if (!value || value === CUSTOM_MODEL_VALUE) {
+				if (value === CUSTOM_MODEL_VALUE) {
 					customModelProviders.add(provider);
 					tab.display();
 					return;
 				}
-				customModelProviders.delete(provider);
 				draft.model = value;
+				if (customMode) {
+					customModelProviders.delete(provider);
+					void saveCurrentConfig(tab, draft).then(() => tab.display());
+				}
 			});
 		});
-		if (customModelProviders.has(provider) || getModelSelectValue(draft, cachedModels, customModelProviders.has(provider)) === CUSTOM_MODEL_VALUE) {
-			renderCustomModelInput(setting, draft);
-		}
-	} else {
+	}
+
+	if (customMode) {
 		renderCustomModelInput(setting, draft);
 	}
 
@@ -259,7 +221,6 @@ async function selectProvider(tab: TranslationSettingTab, provider: TranslationP
 	tab.plugin.settings.currentProvider = provider;
 	tab.plugin.settings.currentProviderConfig = getDefaultProviderConfig(provider);
 	customModelProviders.delete(provider);
-	showQuickStartDetails = true;
 	await tab.plugin.saveSettings();
 	tab.display();
 }
@@ -405,34 +366,6 @@ function renderCustomModelInput(setting: Setting, draft: TranslationProviderConf
 				draft.model = value;
 			});
 	});
-}
-
-function getProviderConfigIssues(provider: TranslationProviderId, config: TranslationProviderConfig): string[] {
-	const issues: string[] = [];
-	if (PROVIDER_KINDS[provider] === "llm") {
-		if (provider !== "ollama" && !config.apiKey.trim()) issues.push("API key");
-		if (!config.baseUrl.trim()) issues.push("Base URL");
-		if (!config.model.trim()) issues.push("Model");
-		return issues;
-	}
-	if (provider === "deeplx") {
-		if (!config.baseUrl.trim()) issues.push("Base URL");
-	} else if (provider === "baidu" || provider === "youdao") {
-		if (!config.appId.trim()) issues.push(provider === "baidu" ? "App ID" : "App key");
-		if (!config.appSecret.trim()) issues.push("App secret");
-	} else if (provider === "aws-translate") {
-		if (!config.accessKeyId.trim()) issues.push("Access key ID");
-		if (!config.appSecret.trim()) issues.push("Secret access key");
-		if (!config.region.trim()) issues.push("Region");
-	} else {
-		if (!config.apiKey.trim()) issues.push("API key");
-		if (provider === "azure-translator" && !config.region.trim()) issues.push("Region");
-	}
-	return issues;
-}
-
-function getProviderModelSummary(tab: TranslationSettingTab, config: TranslationProviderConfig): string {
-	return config.model || config.baseUrl || tab.t("settings.api.modelSummaryMissing");
 }
 
 function getKindLabel(tab: TranslationSettingTab, kind: TranslationProviderKind): string {

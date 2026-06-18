@@ -10,7 +10,7 @@ export function displayBasicSettings(tab: TranslationSettingTab, el: HTMLElement
 	tab.heading(el, tab.t("settings.basic.heading"));
 	tab.localeDropdown(el);
 	tab.dropdown(el, tab.t("settings.basic.sourceLanguage.name"), tab.t("settings.basic.sourceLanguage.desc"), "sourceLanguage", getSourceLanguageOptions(locale));
-	tab.dropdown(el, tab.t("settings.basic.targetLanguage.name"), getTargetLanguageDesc(tab), "targetLanguage", targetLanguages);
+	tab.dropdown(el, tab.t("settings.basic.targetLanguage.name"), getTargetLanguageDesc(tab), "targetLanguage", targetLanguages, false, () => tab.plugin.immersiveManager.refreshActiveViews());
 }
 
 export function displayAboutSettings(tab: TranslationSettingTab, el: HTMLElement): void {

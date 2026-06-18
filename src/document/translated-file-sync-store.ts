@@ -15,8 +15,8 @@ const LEGACY_SYNC_MARKER_SUFFIX = "-->";
 export class TranslatedFileSyncStore {
 	constructor(private readonly plugin: TranslationPlugin) {}
 
-	async findLinkedTranslatedFile(sourceFile: TFile): Promise<TFile | null> {
-		const linkedFile = this.findLinkedFileFromSettings(sourceFile);
+	async findLinkedTranslatedFile(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<TFile | null> {
+		const linkedFile = await this.findLinkedFileFromSettings(sourceFile, targetLanguage);
 		if (linkedFile) {
 			return linkedFile;
 		}
@@ -25,7 +25,7 @@ export class TranslatedFileSyncStore {
 			const parsed = await this.readTranslatedFile(candidate);
 			if (parsed.legacyMetadata
 				&& parsed.legacyMetadata.sourcePath === sourceFile.path
-				&& parsed.legacyMetadata.targetLanguage === this.plugin.settings.targetLanguage) {
+				&& parsed.legacyMetadata.targetLanguage === targetLanguage) {
 				await this.upsertLink({
 					...parsed.legacyMetadata,
 					translatedPath: candidate.path,
@@ -74,17 +74,33 @@ export class TranslatedFileSyncStore {
 		}
 	}
 
-	async recordGeneratedFile(sourceMarkdown: string, translatedBody: string, sourcePath: string, translatedPath: string): Promise<void> {
+	async recordGeneratedFile(
+		sourceMarkdown: string,
+		translatedBody: string,
+		sourcePath: string,
+		translatedPath: string,
+		targetLanguage = this.plugin.settings.targetLanguage,
+	): Promise<void> {
 		await this.upsertLink({
 			sourcePath,
 			translatedPath,
-			targetLanguage: this.plugin.settings.targetLanguage,
+			targetLanguage,
 			provider: this.plugin.settings.currentProvider,
 			promptUseCase: "translated-file",
 			sourceHash: await sha256Hex(sourceMarkdown),
 			generatedBodyHash: await sha256Hex(translatedBody),
 			updatedAt: new Date().toISOString(),
 		});
+	}
+
+	async isLinkedTranslationCurrent(sourceFile: TFile, targetLanguage = this.plugin.settings.targetLanguage): Promise<boolean> {
+		const link = this.findLinkForSource(sourceFile.path, targetLanguage);
+		if (!link || !getTFileByPath(this.plugin.app.vault, link.translatedPath)) {
+			return false;
+		}
+
+		const sourceMarkdown = await this.plugin.app.vault.read(sourceFile);
+		return link.sourceHash === await sha256Hex(sourceMarkdown);
 	}
 
 	findLinkForSource(sourcePath: string, targetLanguage = this.plugin.settings.targetLanguage): DocumentTranslationLinkSettingEntry | null {
@@ -94,12 +110,81 @@ export class TranslatedFileSyncStore {
 		)) ?? null;
 	}
 
+	findLinksForSource(sourcePath: string): DocumentTranslationLinkSettingEntry[] {
+		return this.plugin.settings.documentTranslationLinks.filter(item => item.sourcePath === sourcePath);
+	}
+
 	findLinkByTranslatedPath(translatedPath: string): DocumentTranslationLinkSettingEntry | null {
 		return this.plugin.settings.documentTranslationLinks.find(item => item.translatedPath === translatedPath) ?? null;
 	}
 
-	private findLinkedFileFromSettings(sourceFile: TFile): TFile | null {
-		const link = this.findLinkForSource(sourceFile.path);
+	async removeLinkForSource(sourcePath: string, targetLanguage = this.plugin.settings.targetLanguage): Promise<void> {
+		const link = this.findLinkForSource(sourcePath, targetLanguage);
+		if (!link) {
+			return;
+		}
+		await this.removeLink(link.sourcePath, link.translatedPath, link.targetLanguage);
+	}
+
+	async removeMissingLinks(): Promise<void> {
+		const before = this.plugin.settings.documentTranslationLinks.length;
+		this.plugin.settings.documentTranslationLinks = this.plugin.settings.documentTranslationLinks
+			.filter(link => !!getTFileByPath(this.plugin.app.vault, link.translatedPath));
+		if (this.plugin.settings.documentTranslationLinks.length !== before) {
+			await this.plugin.saveSettings();
+		}
+	}
+
+	async removeLinksForSource(sourcePath: string): Promise<void> {
+		const before = this.plugin.settings.documentTranslationLinks.length;
+		this.plugin.settings.documentTranslationLinks = this.plugin.settings.documentTranslationLinks
+			.filter(item => item.sourcePath !== sourcePath);
+		if (this.plugin.settings.documentTranslationLinks.length !== before) {
+			await this.plugin.saveSettings();
+		}
+	}
+
+	async removeLinkByTranslatedPath(translatedPath: string): Promise<void> {
+		const before = this.plugin.settings.documentTranslationLinks.length;
+		this.plugin.settings.documentTranslationLinks = this.plugin.settings.documentTranslationLinks
+			.filter(item => item.translatedPath !== translatedPath);
+		if (this.plugin.settings.documentTranslationLinks.length !== before) {
+			await this.plugin.saveSettings();
+		}
+	}
+
+	async renameSourceInLinks(oldSourcePath: string, newSourcePath: string): Promise<void> {
+		let changed = false;
+		this.plugin.settings.documentTranslationLinks = this.plugin.settings.documentTranslationLinks
+			.map(item => {
+				if (item.sourcePath !== oldSourcePath) {
+					return item;
+				}
+				changed = true;
+				return {...item, sourcePath: newSourcePath};
+			});
+		if (changed) {
+			await this.plugin.saveSettings();
+		}
+	}
+
+	async renameTranslatedInLinks(oldTranslatedPath: string, newTranslatedPath: string): Promise<void> {
+		let changed = false;
+		this.plugin.settings.documentTranslationLinks = this.plugin.settings.documentTranslationLinks
+			.map(item => {
+				if (item.translatedPath !== oldTranslatedPath) {
+					return item;
+				}
+				changed = true;
+				return {...item, translatedPath: newTranslatedPath};
+			});
+		if (changed) {
+			await this.plugin.saveSettings();
+		}
+	}
+
+	private async findLinkedFileFromSettings(sourceFile: TFile, targetLanguage: string): Promise<TFile | null> {
+		const link = this.findLinkForSource(sourceFile.path, targetLanguage);
 		if (!link) {
 			return null;
 		}
@@ -109,7 +194,7 @@ export class TranslatedFileSyncStore {
 			return file;
 		}
 
-		void this.removeLink(link.sourcePath, link.translatedPath, link.targetLanguage);
+		await this.removeLink(link.sourcePath, link.translatedPath, link.targetLanguage);
 		return null;
 	}
 

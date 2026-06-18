@@ -1,6 +1,6 @@
 {
 	"name": "selection-translator",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"description": "An Obsidian plugin for selection, immersive, document, image, and speech translation.",
 	"main": "main.js",
 	"type": "module",
@@ -32,6 +32,7 @@
 	},
 	"dependencies": {
 		"@lezer/markdown": "^1.6.3",
+		"@tanstack/virtual-core": "^3.17.1",
 		"obsidian": "latest"
 	}
 }

@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS: TranslationPluginSettings = {
 	currentProvider: "openai",
 	currentProviderConfig: getDefaultProviderConfig("openai"),
 	requestTimeout: 15000,
-	maxRetries: 1,
+	maxRetries: 3,
 
 	ttsEnabled: false,
 	ttsProvider: "web-speech",
@@ -39,13 +39,9 @@ export const DEFAULT_SETTINGS: TranslationPluginSettings = {
 	enableImmersiveTranslation: false,
 	immersiveMode: "bilingual",
 	immersiveStyle: "weakened",
-	immersiveMinCharacters: 20,
-	immersiveMinWords: 3,
-	immersiveSkipTargetLanguage: true,
-	immersiveQueueRate: 1,
-	immersiveQueueCapacity: 2,
+	immersiveQueueRate: 3,
+	immersiveQueueCapacity: 3,
 	immersiveCustomCss: "",
-	enablePercentageScrollSync: false,
 
 	hideApiKeys: true,
 
