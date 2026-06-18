@@ -13,8 +13,8 @@ const voiceCache = new Map<TtsProviderId, TtsVoiceInfo[]>();
 let showAdvancedTtsSettings = false;
 
 export function displayTtsSettings(tab: TranslationSettingTab, el: HTMLElement): void {
-	tab.heading(el, "TTS");
-	tab.toggle(el, tab.t("common.enabled"), "Enable speech playback through the TTS service. The first version only tests speech on this page.", "ttsEnabled");
+	tab.heading(el, tab.t("settings.tabs.tts"));
+	tab.toggle(el, tab.t("common.enabled"), "", "ttsEnabled");
 	renderProvider(tab, el);
 	renderBasicProviderConfig(tab, el);
 	renderTest(tab, el);
@@ -81,13 +81,13 @@ function renderTest(tab: TranslationSettingTab, el: HTMLElement): void {
 			.setCta()
 			.onClick(async () => {
 				button.setDisabled(true);
-				const taskId = tab.plugin.taskLogManager.startTask("TTS test");
+				const taskId = tab.plugin.taskLogManager.startTask(tab.t("settings.tts.testTask"));
 				try {
 					await tab.plugin.ttsService.test(testText);
-					tab.plugin.taskLogManager.complete(taskId, "TTS test completed.");
+					tab.plugin.taskLogManager.complete(taskId, tab.t("settings.tts.testCompleted"));
 				} catch (error) {
 					console.error("Failed to test TTS", error);
-					tab.plugin.taskLogManager.fail(taskId, error instanceof Error ? error.message : "TTS test failed.");
+					tab.plugin.taskLogManager.fail(taskId, error instanceof Error ? error.message : tab.t("settings.tts.testFailed"));
 				} finally {
 					button.setDisabled(false);
 				}
@@ -159,15 +159,15 @@ function renderVoice(tab: TranslationSettingTab, el: HTMLElement): void {
 		.setIcon("refresh-cw")
 		.onClick(async () => {
 			button.setDisabled(true);
-			const taskId = tab.plugin.taskLogManager.startTask(`Fetch TTS voices: ${TTS_PROVIDER_LABELS[provider]}`);
+			const taskId = tab.plugin.taskLogManager.startTask(tab.t("settings.tts.fetchVoicesTask", {provider: TTS_PROVIDER_LABELS[provider]}));
 			try {
 				const nextVoices = await tab.plugin.ttsService.listVoices();
 				voiceCache.set(provider, nextVoices);
-				tab.plugin.taskLogManager.complete(taskId, `Fetched ${nextVoices.length} voices.`);
+				tab.plugin.taskLogManager.complete(taskId, tab.t("settings.tts.voicesFetched", {count: nextVoices.length}));
 				tab.display();
 			} catch (error) {
 				console.error("Failed to list TTS voices", error);
-				tab.plugin.taskLogManager.fail(taskId, error instanceof Error ? error.message : "Unable to fetch TTS voices.");
+				tab.plugin.taskLogManager.fail(taskId, error instanceof Error ? error.message : tab.t("settings.tts.fetchVoicesFailed"));
 				button.setDisabled(false);
 			}
 		}));

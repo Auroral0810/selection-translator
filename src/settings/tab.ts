@@ -79,7 +79,11 @@ export class TranslationSettingTab extends PluginSettingTab {
 	}
 
 	toggle(el: HTMLElement, name: string, desc: string, key: BooleanKey): void {
-		new Setting(el).setName(name).setDesc(desc).addToggle(toggle => toggle
+		const setting = new Setting(el).setName(name);
+		if (desc) {
+			setting.setDesc(desc);
+		}
+		setting.addToggle(toggle => toggle
 			.setValue(this.plugin.settings[key])
 			.onChange(async value => {
 				this.plugin.settings[key] = value as never;

@@ -25,7 +25,7 @@ export class TaskLogManager {
 
 	startTask(title: string): string {
 		const id = `task-${this.nextId++}`;
-		const notice = new Notice(this.formatMessage(title, "running", "Starting..."), RUNNING_NOTICE_DURATION_MS);
+		const notice = new Notice(this.formatMessage(title, "running", t(this.plugin, "task.starting")), RUNNING_NOTICE_DURATION_MS);
 		this.tasks.set(id, {
 			title,
 			status: "running",
@@ -50,17 +50,17 @@ export class TaskLogManager {
 		task.notice.setMessage(this.formatMessage(task.title, task.status, this.getLatestLine(task)));
 	}
 
-	complete(taskId: string, message = "Done."): void {
+	complete(taskId: string, message = t(this.plugin, "task.done")): void {
 		this.finish(taskId, "success", message);
 		this.scheduleHide(taskId, SUCCESS_NOTICE_DURATION_MS);
 	}
 
-	fail(taskId: string, message = "Task failed."): void {
+	fail(taskId: string, message = t(this.plugin, "task.failed")): void {
 		this.finish(taskId, "failed", message);
 		this.scheduleHide(taskId, FAILURE_NOTICE_DURATION_MS);
 	}
 
-	cancel(taskId: string, message = "Task cancelled."): void {
+	cancel(taskId: string, message = t(this.plugin, "task.cancelled")): void {
 		this.finish(taskId, "cancelled", message);
 		this.scheduleHide(taskId, FAILURE_NOTICE_DURATION_MS);
 	}

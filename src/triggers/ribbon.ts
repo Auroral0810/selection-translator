@@ -1,4 +1,4 @@
-import {Menu, Notice} from "obsidian";
+import {Menu, Notice, TFile} from "obsidian";
 import {t} from "../i18n";
 import TranslationPlugin from "../main";
 import {openSideBySideTranslation} from "../actions/open-side-by-side-translation";
@@ -12,8 +12,9 @@ export function registerTranslationRibbon(plugin: TranslationPlugin) {
 		updateRibbonState(plugin, ribbonEl);
 		const menu = new Menu();
 		const activeFile = plugin.app.workspace.getActiveFile();
+		const sideBySideSourceFile = getSideBySideSourceFile(plugin, activeFile);
 		const immersiveActive = plugin.immersiveManager.isActiveForCurrentFile();
-		const sideBySideActive = activeFile ? plugin.documentTranslationService.isActive(activeFile.path) : false;
+		const sideBySideActive = sideBySideSourceFile ? plugin.documentTranslationService.isActive(sideBySideSourceFile.path) : false;
 		const scrollSyncActive = plugin.sideBySideSyncManager.isEnabled();
 
 		menu.addItem(item => item
@@ -57,17 +58,41 @@ export function registerTranslationRibbon(plugin: TranslationPlugin) {
 				updateRibbonState(plugin, ribbonEl);
 			}));
 
-		menu.addItem(item => item
-			.setTitle(sideBySideActive ? t(plugin, "menu.refreshSideBySide") : t(plugin, "menu.sideBySide"))
-			.setIcon(sideBySideActive ? "check" : "book-open-text")
-			.onClick(() => {
-				void openSideBySideTranslation(plugin);
-				window.setTimeout(() => updateRibbonState(plugin, ribbonEl), 250);
-			}));
+		if (!sideBySideSourceFile) {
+			menu.addItem(item => item
+				.setTitle(t(plugin, "menu.openMarkdownRequired"))
+				.setIcon("book-open-text")
+				.setDisabled(true));
+		} else if (sideBySideActive) {
+			menu.addItem(item => item
+				.setTitle(t(plugin, "menu.refreshSideBySide"))
+				.setIcon("refresh-cw")
+				.onClick(() => {
+					void plugin.documentTranslationService.refresh(sideBySideSourceFile);
+					window.setTimeout(() => updateRibbonState(plugin, ribbonEl), 250);
+				}));
+
+			menu.addItem(item => item
+				.setTitle(t(plugin, "menu.closeSideBySide"))
+				.setIcon("panel-right-close")
+				.onClick(() => {
+					plugin.documentTranslationService.closeSideBySide(sideBySideSourceFile.path);
+					new Notice(t(plugin, "notice.sideBySideClosed"));
+					updateRibbonState(plugin, ribbonEl);
+				}));
+		} else {
+			menu.addItem(item => item
+				.setTitle(t(plugin, "menu.sideBySide"))
+				.setIcon("book-open-text")
+				.onClick(() => {
+					void openSideBySideTranslation(plugin);
+					window.setTimeout(() => updateRibbonState(plugin, ribbonEl), 250);
+				}));
+		}
 
 		menu.addItem(item => item
 			.setTitle(scrollSyncActive ? t(plugin, "menu.stopScrollSync") : t(plugin, "menu.syncScroll"))
-			.setIcon(scrollSyncActive ? "check" : "move-vertical")
+			.setIcon(scrollSyncActive ? "unlink" : "move-vertical")
 			.onClick(() => {
 				plugin.sideBySideSyncManager.toggleForVisibleMarkdownLeaves();
 				window.setTimeout(() => updateRibbonState(plugin, ribbonEl), 250);
@@ -84,10 +109,18 @@ export function registerTranslationRibbon(plugin: TranslationPlugin) {
 	update();
 }
 
+function getSideBySideSourceFile(plugin: TranslationPlugin, file: TFile | null): TFile | null {
+	if (!file || file.extension !== "md") {
+		return null;
+	}
+	return plugin.documentTranslationService.getSourceFileForPath(file.path) ?? file;
+}
+
 function updateRibbonState(plugin: TranslationPlugin, ribbonEl: HTMLElement): void {
 	const file = plugin.app.workspace.getActiveFile();
+	const sideBySideSourceFile = getSideBySideSourceFile(plugin, file);
 	const hasActiveMode = plugin.immersiveManager.isActiveForCurrentFile()
-		|| (file ? plugin.documentTranslationService.isActive(file.path) : false)
+		|| (sideBySideSourceFile ? plugin.documentTranslationService.isActive(sideBySideSourceFile.path) : false)
 		|| plugin.sideBySideSyncManager.isEnabled();
 	ribbonEl.toggleClass("selection-translator-ribbon-active", hasActiveMode);
 }

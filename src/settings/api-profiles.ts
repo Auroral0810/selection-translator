@@ -274,20 +274,20 @@ async function saveCurrentConfig(tab: TranslationSettingTab, draft: TranslationP
 }
 
 async function fetchModels(tab: TranslationSettingTab, button: {setDisabled(value: boolean): unknown}, provider: TranslationProviderId): Promise<void> {
-	const taskId = startSettingsTask(tab, `Fetch models: ${PROVIDER_LABELS[provider]}`);
+	const taskId = startSettingsTask(tab, tab.t("task.fetchModels", {provider: PROVIDER_LABELS[provider]}));
 	button.setDisabled(true);
 	try {
-		tab.plugin.taskLogManager.append(taskId, `Provider: ${PROVIDER_LABELS[provider]}\n`);
-		tab.plugin.taskLogManager.append(taskId, `Base URL: ${tab.plugin.settings.currentProviderConfig.baseUrl || "-"}\n`);
+		tab.plugin.taskLogManager.append(taskId, `${tab.t("task.provider", {provider: PROVIDER_LABELS[provider]})}\n`);
+		tab.plugin.taskLogManager.append(taskId, `${tab.t("task.baseUrl", {baseUrl: tab.plugin.settings.currentProviderConfig.baseUrl || "-"})}\n`);
 		const models = await tab.plugin.translateService.listModels();
 		modelCache.set(provider, models);
-		tab.plugin.taskLogManager.append(taskId, `Fetched ${models.length} models.\n`);
-		tab.plugin.taskLogManager.complete(taskId, `Fetched ${models.length} models.`);
+		tab.plugin.taskLogManager.append(taskId, `${tab.t("task.modelsFetched", {count: models.length})}\n`);
+		tab.plugin.taskLogManager.complete(taskId, tab.t("task.modelsFetched", {count: models.length}));
 		tab.display();
 	} catch (error) {
 		console.error("Failed to list provider models", error);
 		const message = error instanceof Error ? shortenError(tab, error.message) : tab.t("settings.api.errorGeneric");
-		tab.plugin.taskLogManager.append(taskId, `Fetch failed: ${message}\n`);
+		tab.plugin.taskLogManager.append(taskId, `${tab.t("task.fetchFailed", {message})}\n`);
 		tab.plugin.taskLogManager.fail(taskId, tab.t("settings.api.fetchModelsFailure"));
 		button.setDisabled(false);
 	}
@@ -306,9 +306,9 @@ function shouldAutoFetchModels(provider: TranslationProviderId, config: Translat
 async function checkCurrentProviderConfig(tab: TranslationSettingTab): Promise<void> {
 	const provider = tab.plugin.settings.currentProvider;
 	const taskId = startSettingsTask(tab, `${tab.t("settings.api.checkConfig")}: ${PROVIDER_LABELS[provider]}`);
-	tab.plugin.taskLogManager.append(taskId, `Provider: ${PROVIDER_LABELS[provider]}\n`);
-	tab.plugin.taskLogManager.append(taskId, `Type: ${getKindLabel(tab, PROVIDER_KINDS[provider])}\n`);
-	tab.plugin.taskLogManager.append(taskId, `Base URL: ${tab.plugin.settings.currentProviderConfig.baseUrl || "-"}\n`);
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.provider", {provider: PROVIDER_LABELS[provider]})}\n`);
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.serviceType", {type: getKindLabel(tab, PROVIDER_KINDS[provider])})}\n`);
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.baseUrl", {baseUrl: tab.plugin.settings.currentProviderConfig.baseUrl || "-"})}\n`);
 	try {
 		await tab.plugin.translateService.testProvider();
 		tab.plugin.taskLogManager.append(taskId, `${tab.t("settings.api.configCheckSuccess")}\n`);
@@ -323,11 +323,11 @@ async function checkCurrentProviderConfig(tab: TranslationSettingTab): Promise<v
 async function testTranslation(tab: TranslationSettingTab): Promise<void> {
 	const provider = tab.plugin.settings.currentProvider;
 	const taskId = startSettingsTask(tab, `${tab.t("settings.api.testTranslation")}: ${PROVIDER_LABELS[provider]}`);
-	tab.plugin.taskLogManager.append(taskId, `Provider: ${PROVIDER_LABELS[provider]}\n`);
-	tab.plugin.taskLogManager.append(taskId, `Type: ${getKindLabel(tab, PROVIDER_KINDS[provider])}\n`);
-	tab.plugin.taskLogManager.append(taskId, `Model: ${tab.plugin.settings.currentProviderConfig.model || "-"}\n`);
-	tab.plugin.taskLogManager.append(taskId, `Target language: ${tab.plugin.settings.targetLanguage}\n`);
-	tab.plugin.taskLogManager.append(taskId, "Source text: Hello, world.\n");
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.provider", {provider: PROVIDER_LABELS[provider]})}\n`);
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.serviceType", {type: getKindLabel(tab, PROVIDER_KINDS[provider])})}\n`);
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.model", {model: tab.plugin.settings.currentProviderConfig.model || "-"})}\n`);
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.targetLanguage", {language: tab.plugin.settings.targetLanguage})}\n`);
+	tab.plugin.taskLogManager.append(taskId, `${tab.t("task.sourceText", {text: "Hello, world."})}\n`);
 	try {
 		const result = await tab.plugin.translateService.translateWithCache({
 			text: "Hello, world.",
@@ -338,7 +338,7 @@ async function testTranslation(tab: TranslationSettingTab): Promise<void> {
 			bypassCache: true,
 			cacheScope: "settings-test",
 		});
-		tab.plugin.taskLogManager.append(taskId, `Translation: ${result.text}\n`);
+		tab.plugin.taskLogManager.append(taskId, `${tab.t("task.translation", {text: result.text})}\n`);
 		tab.plugin.taskLogManager.complete(taskId, tab.t("settings.api.testSuccess"));
 	} catch (error) {
 		const message = error instanceof Error ? shortenError(tab, error.message) : tab.t("settings.api.testFailure");

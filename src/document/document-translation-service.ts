@@ -11,6 +11,7 @@ export interface DocumentTranslationService {
 	refresh(sourceFile: TFile): Promise<void>;
 	isActive(sourcePath: string): boolean;
 	getSourceFileForPath(path: string): TFile | null;
+	closeSideBySide(sourcePath: string): void;
 	stop(sourcePath: string): void;
 	stopAll(): void;
 	findLinkedTranslatedFile(sourceFile: TFile): Promise<TFile | null>;
@@ -79,6 +80,18 @@ export class DefaultDocumentTranslationService implements DocumentTranslationSer
 		return link ? getTFileByPath(this.plugin.app.vault, link.sourcePath) : null;
 	}
 
+	closeSideBySide(sourcePath: string): void {
+		const translatedPath = this.syncService.getTranslatedPath(sourcePath) ?? this.syncStore.findLinkForSource(sourcePath)?.translatedPath ?? null;
+		this.syncService.stop(sourcePath);
+		this.plugin.sideBySideSyncManager.disable();
+		if (!translatedPath) {
+			return;
+		}
+
+		const translatedLeaf = this.findOpenLeaf(translatedPath);
+		translatedLeaf?.detach();
+	}
+
 	stop(sourcePath: string): void {
 		this.syncService.stop(sourcePath);
 	}
@@ -89,18 +102,6 @@ export class DefaultDocumentTranslationService implements DocumentTranslationSer
 
 	findLinkedTranslatedFile(sourceFile: TFile): Promise<TFile | null> {
 		return this.syncStore.findLinkedTranslatedFile(sourceFile);
-	}
-
-	private closeSideBySide(sourcePath: string): void {
-		const translatedPath = this.syncService.getTranslatedPath(sourcePath) ?? this.syncStore.findLinkForSource(sourcePath)?.translatedPath ?? null;
-		this.syncService.stop(sourcePath);
-		this.plugin.sideBySideSyncManager.disable();
-		if (!translatedPath) {
-			return;
-		}
-
-		const translatedLeaf = this.findOpenLeaf(translatedPath);
-		translatedLeaf?.detach();
 	}
 
 	private async restoreOpenSideBySideSessions(): Promise<void> {

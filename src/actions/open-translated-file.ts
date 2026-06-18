@@ -3,7 +3,7 @@ import {t} from "../i18n";
 import TranslationPlugin from "../main";
 import {formatTranslationError} from "../translation/errors";
 
-export async function openTranslatedFileOnRight(plugin: TranslationPlugin, startMessage: string, doneMessage: string): Promise<void> {
+export async function openTranslatedFileOnRight(plugin: TranslationPlugin): Promise<void> {
 	const file = plugin.app.workspace.getActiveFile();
 
 	if (!file || file.extension !== "md") {
@@ -14,32 +14,29 @@ export async function openTranslatedFileOnRight(plugin: TranslationPlugin, start
 	const sourceFile = plugin.documentTranslationService.getSourceFileForPath(file.path) ?? file;
 	const isActive = plugin.documentTranslationService.isActive(sourceFile.path);
 
-	// For opening (not closing), show persistent loading notice
 	let loadingNotice: Notice | null = null;
 	if (!isActive) {
 		loadingNotice = new Notice(
 			t(plugin, "document.translatingFile"),
-			0 // Don't auto-hide
+			0
 		);
-	} else {
-		new Notice(t(plugin, "notice.closingSideBySide"));
 	}
 
 	try {
-		const result = await plugin.documentTranslationService.toggleSideBySide(sourceFile);
+		if (isActive) {
+			await plugin.documentTranslationService.refresh(sourceFile);
+		} else {
+			await plugin.documentTranslationService.openSideBySide(sourceFile);
+		}
 
-		// Hide loading notice after completion
 		if (loadingNotice) {
 			loadingNotice.hide();
 		}
 
-		if (result === "opened") {
+		if (!isActive) {
 			new Notice(`✅ ${t(plugin, "document.openedOnRight")}`, 3000);
-		} else {
-			new Notice(t(plugin, "notice.sideBySideClosed"));
 		}
 	} catch (error) {
-		// Hide loading notice on error
 		if (loadingNotice) {
 			loadingNotice.hide();
 		}

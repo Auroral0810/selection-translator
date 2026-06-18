@@ -20,13 +20,13 @@ export function displayCacheSettings(host: CacheSettingsHost, el: HTMLElement): 
 	host.number(el, translate("settings.cache.maxAge.name"), translate("settings.cache.maxAge.desc"), "cacheMaxAgeDays", 0, 3650);
 	host.button(el, translate("settings.cache.cleanExpired.name"), translate("settings.cache.cleanExpired.desc"), translate("common.refresh"), async () => {
 		const taskId = startSettingsTask(host.plugin, translate("settings.cache.cleanExpired.name"));
-		host.plugin.taskLogManager.append(taskId, `Cache retention days: ${host.plugin.settings.cacheMaxAgeDays}\n`);
-		host.plugin.taskLogManager.append(taskId, `Before: ${host.plugin.settings.translationCache.length}\n`);
+		host.plugin.taskLogManager.append(taskId, `${translate("task.cacheRetentionDays", {days: host.plugin.settings.cacheMaxAgeDays})}\n`);
+		host.plugin.taskLogManager.append(taskId, `${translate("task.beforeCount", {count: host.plugin.settings.translationCache.length})}\n`);
 		const removed = host.plugin.translationCache.cleanExpired();
 		await host.plugin.saveSettings();
-		host.plugin.taskLogManager.append(taskId, `Removed: ${removed}\n`);
-		host.plugin.taskLogManager.append(taskId, `After: ${host.plugin.settings.translationCache.length}\n`);
-		host.plugin.taskLogManager.complete(taskId, `Removed ${removed} expired cache entries.`);
+		host.plugin.taskLogManager.append(taskId, `${translate("task.removedCount", {count: removed})}\n`);
+		host.plugin.taskLogManager.append(taskId, `${translate("task.afterCount", {count: host.plugin.settings.translationCache.length})}\n`);
+		host.plugin.taskLogManager.complete(taskId, translate("task.expiredCacheRemoved", {count: removed}));
 	});
 	host.button(el, translate("settings.cache.clear.name"), translate("settings.cache.clear.desc"), translate("common.reset"), async (button) => {
 		const before = host.plugin.settings.translationCache.length;
@@ -34,8 +34,9 @@ export function displayCacheSettings(host: CacheSettingsHost, el: HTMLElement): 
 		// Show confirmation dialog for destructive action
 		const confirmed = await showConfirmDialog(
 			host.plugin.app,
-			translate("settings.cache.clear.confirmTitle") || "Clear all cache?",
-			translate("settings.cache.clear.confirmMessage") || `This will permanently delete ${before} cached translations. This action cannot be undone.`
+			translate("settings.cache.clear.confirmTitle"),
+			translate("settings.cache.clear.confirmMessage", {count: before}),
+			translate
 		);
 
 		if (!confirmed) {
@@ -45,11 +46,11 @@ export function displayCacheSettings(host: CacheSettingsHost, el: HTMLElement): 
 		button.disabled = true;
 		try {
 			const taskId = startSettingsTask(host.plugin, translate("settings.cache.clear.name"));
-			host.plugin.taskLogManager.append(taskId, `Before: ${before}\n`);
+			host.plugin.taskLogManager.append(taskId, `${translate("task.beforeCount", {count: before})}\n`);
 			host.plugin.translationCache.clear();
 			await host.plugin.saveSettings();
-			host.plugin.taskLogManager.append(taskId, "All translation cache entries cleared.\n");
-			host.plugin.taskLogManager.complete(taskId, `Cleared ${before} translation cache entries.`);
+			host.plugin.taskLogManager.append(taskId, `${translate("task.cacheClearedDetail")}\n`);
+			host.plugin.taskLogManager.complete(taskId, translate("task.cacheCleared", {count: before}));
 		} finally {
 			button.disabled = false;
 		}
@@ -60,9 +61,9 @@ function startSettingsTask(plugin: TranslationPlugin, title: string): string {
 	return plugin.taskLogManager.startTask(title);
 }
 
-async function showConfirmDialog(app: App, title: string, message: string): Promise<boolean> {
+async function showConfirmDialog(app: App, title: string, message: string, translate: (key: string, vars?: Record<string, string | number>) => string): Promise<boolean> {
 	return new Promise((resolve) => {
-		const modal = new ConfirmModal(app, title, message, (result) => {
+		const modal = new ConfirmModal(app, title, message, translate, (result) => {
 			resolve(result);
 		});
 		modal.open();
@@ -74,6 +75,7 @@ class ConfirmModal extends Modal {
 		app: App,
 		private title: string,
 		private message: string,
+		private translate: (key: string, vars?: Record<string, string | number>) => string,
 		private onResult: (result: boolean) => void
 	) {
 		super(app);
@@ -91,7 +93,7 @@ class ConfirmModal extends Modal {
 		});
 
 		buttonContainer.createEl("button", {
-			text: "Cancel",
+			text: this.translate("common.cancel"),
 			cls: "mod-cancel",
 		}).addEventListener("click", () => {
 			this.onResult(false);
@@ -99,7 +101,7 @@ class ConfirmModal extends Modal {
 		});
 
 		buttonContainer.createEl("button", {
-			text: "Confirm",
+			text: this.translate("common.confirm"),
 			cls: "mod-warning",
 		}).addEventListener("click", () => {
 			this.onResult(true);
